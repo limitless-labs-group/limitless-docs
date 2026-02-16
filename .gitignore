@@ -1,4 +1,7 @@
 node_modules/
+.agent/
+.agents/
+.cursor/
 
 # Reference materials (SDK repos + OpenAPI spec are for reference only)
 limitless-sdk/
