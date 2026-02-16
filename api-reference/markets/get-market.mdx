@@ -2,3 +2,7 @@
 title: "Get Market Details"
 openapi: "GET /markets/{addressOrSlug}"
 ---
+
+<Tip>
+  This endpoint returns **venue data** (`venue.exchange` and `venue.adapter`) needed for [EIP-712 order signing](/developers/eip712-signing). Fetch once per market and cache — venue data is static.
+</Tip>

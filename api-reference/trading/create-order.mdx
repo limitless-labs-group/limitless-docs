@@ -2,3 +2,10 @@
 title: "Create Order"
 openapi: "POST /orders"
 ---
+
+<Info>
+  Before creating orders:
+  1. Fetch market data via [Get Market Details](/api-reference/markets/get-market) to get venue and token IDs
+  2. Sign the order using [EIP-712](/developers/eip712-signing) with `venue.exchange` as `verifyingContract`
+  3. Ensure you have [token approvals](/developers/venue-system#required-token-approvals) set up
+</Info>

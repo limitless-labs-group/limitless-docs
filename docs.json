@@ -60,10 +60,12 @@
         "tab": "For Developers",
         "groups": [
           {
-            "group": "Overview",
+            "group": "Getting Started",
             "pages": [
               "developers/introduction",
-              "developers/authentication"
+              "developers/authentication",
+              "developers/venue-system",
+              "developers/eip712-signing"
             ]
           },
           {
@@ -73,14 +75,6 @@
               "developers/quickstart/java",
               "developers/quickstart/nodejs",
               "developers/quickstart/websocket"
-            ]
-          },
-          {
-            "group": "Concepts",
-            "pages": [
-              "developers/venue-system",
-              "developers/eip712-signing",
-              "developers/websocket-events"
             ]
           },
           {
@@ -103,6 +97,12 @@
               "developers/sdk/python/portfolio",
               "developers/sdk/python/websocket",
               "developers/sdk/python/error-handling"
+            ]
+          },
+          {
+            "group": "WebSocket",
+            "pages": [
+              "developers/websocket-events"
             ]
           }
         ]
@@ -183,6 +183,11 @@
           "anchor": "Discord",
           "href": "https://discord.com/invite/yb4SscD8RZ",
           "icon": "discord"
+        },
+        {
+          "anchor": "Twitter",
+          "href": "https://x.com/trylimitless",
+          "icon": "x-twitter"
         }
       ]
     }

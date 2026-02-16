@@ -11,38 +11,55 @@ https://api.limitless.exchange
 
 ## Authentication
 
-All authenticated endpoints require the `X-API-Key` header:
+Most endpoints require the `X-API-Key` header. Generate a key at [limitless.exchange](https://limitless.exchange) → profile menu → **Api keys**.
 
 ```bash
-curl -H "X-API-Key: lmts_your_key_here" https://api.limitless.exchange/markets
+curl -H "X-API-Key: lmts_your_key_here" \
+  https://api.limitless.exchange/markets/active
 ```
 
-See [Authentication](/developers/authentication) for details on obtaining an API key.
+<Note>
+  Public endpoints like market browsing and orderbook data do **not** require authentication.
+</Note>
+
+See the [Authentication guide](/developers/authentication) for full details.
 
 ## Endpoint Groups
 
 <CardGroup cols={2}>
   <Card title="Authentication" icon="key" href="/api-reference/auth/get-signing-message">
-    Login, logout, and session verification.
+    Get signing messages, login/logout, and verify sessions.
   </Card>
   <Card title="Markets" icon="chart-line" href="/api-reference/markets/browse-active">
-    Browse, search, and get market details.
+    Browse active markets, search, get details and feed events.
   </Card>
   <Card title="Trading" icon="arrow-right-arrow-left" href="/api-reference/trading/create-order">
-    Create, cancel, and manage orders.
+    Create and cancel orders, get orderbook, historical prices, and user orders.
   </Card>
   <Card title="Portfolio" icon="wallet" href="/api-reference/portfolio/positions">
-    Positions, trades, PnL, and history.
+    Positions, trades, PnL chart, history, points, and allowance.
   </Card>
   <Card title="Public Portfolio" icon="globe" href="/api-reference/public-portfolio/positions">
-    Public user positions and volume.
+    Public user positions, traded volume, and PnL data.
   </Card>
 </CardGroup>
+
+## Key Concepts
+
+| Concept | Description |
+|---------|-------------|
+| **Venue system** | Each CLOB market has a venue with `exchange` and `adapter` addresses. Fetch via `GET /markets/:slug`. See [Venue System](/developers/venue-system). |
+| **EIP-712 signing** | Orders are signed using the venue's `exchange` address as `verifyingContract`. See [EIP-712 Signing](/developers/eip712-signing). |
+| **Order types** | **GTC** (Good Till Cancelled) stays on the orderbook. **FOK** (Fill or Kill) executes immediately or cancels. |
+| **Token IDs** | Each market has YES and NO position IDs returned in `positionIds`. Use these as `tokenId` in orders. |
+| **USDC decimals** | USDC on Base has 6 decimals. Amounts are scaled by 1e6. |
+
+## WebSocket API
+
+For real-time orderbook and position updates, see the [WebSocket Events](/developers/websocket-events) reference.
+
+**URL:** `wss://ws.limitless.exchange` | **Namespace:** `/markets`
 
 ## Rate Limits
 
 Contact [hey@limitless.network](mailto:hey@limitless.network) for rate limit details.
-
-## WebSocket API
-
-For real-time data, see the [WebSocket Events](/developers/websocket-events) reference.

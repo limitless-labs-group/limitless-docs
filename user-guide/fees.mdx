@@ -1,12 +1,96 @@
 ---
 title: "Fees"
-description: "Trading fee structure on Limitless Exchange"
+description: "How trading fees work on Limitless Exchange"
 ---
 
 ## Overview
 
-Limitless charges fees on some markets. For a detailed breakdown of how fees are structured, see the official blog post:
+Fees on Limitless adapt to both the **market price** and your **trading experience**. The system is designed to reward early conviction, discourage manipulation, and give loyal traders significant discounts.
 
-<Card title="How Trading Fees Work" icon="arrow-up-right-from-square" href="https://limitless.exchange/blog/how-trading-fees-work" horizontal>
-  Read the full breakdown on the Limitless blog.
+## Fee Structure by Market Type
+
+### AMM Markets
+
+A flat **0.25%** fee applies to all trades. No curves, no complexity.
+
+### Order Book (CLOB) Markets
+
+Fees are dynamic and range from **0.03% to 3%** — the higher the probability of the event, the lower the fee.
+
+| Factor | How It Works |
+|--------|-------------|
+| **Fee range** | 0.03% – 3% |
+| **Low probability trades** | Higher fee, but better payout odds |
+| **High probability trades** | Lower fee, but worse odds |
+| **Buy-side fees** | Paid in outcome tokens (contracts) |
+| **Sell-side fees** | 0% to 1.5% as event probability approaches 50%, paid in collateral (USDC) |
+
+## Makers vs Takers
+
+<Warning>
+  **Fees only apply to takers** — orders that instantly settle against the orderbook.
+</Warning>
+
+| Order Type | Fees? | Details |
+|-----------|-------|---------|
+| **Limit orders (makers)** | No fees | Even though you sign a transaction with fee terms, you pay nothing if your order is placed in the book |
+| **Market orders (takers)** | Fees apply | Only orders that match immediately are charged |
+
+If you provide liquidity to the book, you can trade **completely fee-free**.
+
+## The Fee Curve
+
+The fee curve adjusts dynamically based on where the market price is when you trade.
+
+### Buy Trades
+
+| Scenario | Fee | Odds |
+|----------|-----|------|
+| **Buy early** (price ≤ 0.50) | Base fee (up to 3%) | Best odds — higher potential payout |
+| **Buy late** (price > 0.50) | Lower fee | Higher price, worse odds |
+
+### Sell Trades
+
+| Scenario | Fee | Why |
+|----------|-----|-----|
+| **Sell far from 0.50** | Lower fee | Clear conviction, low manipulation risk |
+| **Sell at 0.50** (50/50) | Highest fee (up to 1.5%) | Maximum uncertainty — discourages opportunistic exits |
+
+<Info>
+  By discouraging exits at the midpoint, the fee curve protects market integrity when uncertainty is highest.
+</Info>
+
+## Example: How Fees Play Out
+
+Imagine you're buying **YES** shares in a market where the current probability is **40%** (&#36;0.40):
+
+<Steps>
+
+<Step title="You buy early at 40%">
+  Your buy fee = **3.00%**. You pay the full fee, but you're getting in early with better payout odds.
+</Step>
+
+<Step title="Market moves to 70%">
+  If you sell when the market hits 70%, you pay a **lower sell fee** because you're far from the 50/50 uncertainty zone.
+</Step>
+
+<Step title="Someone else buys at 70%">
+  They pay a **lower buy fee**, but get worse odds since the price is already high.
+</Step>
+
+</Steps>
+
+It's all about conviction. Act early and stay smart — the system gives you the edge.
+
+## Why This Fee Model Works
+
+The fee structure is inspired by proven models (including Polymarket and Kalshi) and is designed to:
+
+- **Reward early traders** for taking risk
+- **Discourage flip-flopping** and short-term manipulation
+- **Incentivize long-term** loyal participation
+- **Keep markets fair**, liquid, and meaningful
+
+<Card title="Read the full blog post" icon="arrow-up-right-from-square" href="https://limitless.exchange/blog/how-trading-fees-work" horizontal>
+  Deep dive into fee curves with visual charts on the Limitless blog.
 </Card>

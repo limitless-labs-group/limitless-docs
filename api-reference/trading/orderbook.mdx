@@ -2,3 +2,7 @@
 title: "Get Orderbook"
 openapi: "GET /markets/{slug}/orderbook"
 ---
+
+<Tip>
+  For real-time orderbook updates, use the [WebSocket API](/developers/websocket-events) instead of polling this endpoint. Subscribe to `subscribe_market_prices` with `marketSlugs`.
+</Tip>
