@@ -111,7 +111,7 @@
         "tab": "API Reference",
         "groups": [
           {
-            "group": "",
+            "group": "Overview",
             "pages": [
               "api-reference/introduction"
             ]
@@ -220,5 +220,5 @@
       "mode": "simple"
     }
   },
-  "openapi": "/openapi.json"
+  "openapi": "openapi.json"
 }
