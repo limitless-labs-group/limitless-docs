@@ -5,6 +5,47 @@ description: "How markets are resolved on Limitless Exchange"
 
 ## Overview
 
-The exact method of market resolution is determined on each market's page. The majority of markets are now resolved by **Pyth Network**.
+Every market on Limitless has a defined resolution condition and deadline. When the deadline passes, the market is resolved based on objective data from the designated oracle source.
 
-Check the individual market page for resolution source and criteria before trading.
+## Resolution Process
+
+<Steps>
+
+<Step title="Market deadline passes">
+  Each market has a specific deadline (e.g., "Feb 16, 17:00 UTC"). No new trades are accepted after this time.
+</Step>
+
+<Step title="Oracle reports the outcome">
+  The designated oracle source provides the verified result. The majority of markets are now resolved by **Pyth Network**.
+</Step>
+
+<Step title="Winning shares pay out">
+  Winning shares ("Yes" or "No" depending on outcome) are redeemable for &#36;1.00 each. Losing shares become worthless.
+</Step>
+
+</Steps>
+
+## Oracle Sources
+
+The exact method of resolution is specified on each market's page. Always check the resolution source before trading.
+
+| Oracle | Used For |
+|--------|----------|
+| **Pyth Network** | Crypto price markets (BTC, ETH, SOL, etc.) — majority of markets |
+| **Manual** | Custom event markets resolved by the Limitless team |
+
+## Resolution for Different Market Types
+
+### Standard (CLOB) Markets
+
+Binary Yes/No outcome. One side wins, the other loses.
+
+### Negrisk (Category) Markets
+
+Only one outcome in the group can win. All other outcomes resolve to "No". See [Negrisk Markets](/user-guide/negrisk-overview) for details.
+
+## Disputes and Misresolutions
+
+In cases of misresolved markets, only the bet amount will be refunded. See the [Refund Policy](/user-guide/refund-policy) for details.
+
+If you believe a market was resolved incorrectly, contact the team at [hey@limitless.network](mailto:hey@limitless.network) or via [Discord](https://discord.com/invite/yb4SscD8RZ).
