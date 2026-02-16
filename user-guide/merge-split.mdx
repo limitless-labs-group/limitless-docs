@@ -1,0 +1,35 @@
+---
+title: "Merging & Splitting Shares"
+description: "Convert between collateral and outcome share pairs"
+---
+
+## Overview
+
+Prediction markets have two native mechanisms that don't exist in traditional instruments: **Merging** and **Splitting** shares.
+
+{/* TODO: Add merge/split UI screenshot */}
+<Frame>
+  <img src="/images/placeholder-merge-split.png" alt="Merge and split interface" />
+</Frame>
+
+## Splitting
+
+**Split &#36;1** into **1 Yes share + 1 No share**.
+
+This is useful when you want to take a position on one side without buying from the orderbook — split collateral and sell the side you don't want.
+
+## Merging
+
+**Merge 1 Yes share + 1 No share** back into **&#36;1** collateral.
+
+This lets you exit both sides of a position and recover your collateral without selling on the orderbook.
+
+## Why Use Merge / Split?
+
+- **Capital efficiency** — Open and close positions without relying on orderbook liquidity
+- **Better execution** — Avoid paying the spread
+- **Liquidity defragmentation** — Under the hood, this enables better orderbook matching across Yes/No assets
+
+<Info>
+  Merge and split operations are available directly in the market UI. Look for the **Merge/Split** option on the market page.
+</Info>

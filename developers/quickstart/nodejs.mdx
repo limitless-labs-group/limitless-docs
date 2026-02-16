@@ -1,0 +1,450 @@
+---
+title: "Node.js / TypeScript Quick Start"
+description: "End-to-end TypeScript implementation with viem for trading on Limitless Exchange"
+---
+
+## Overview
+
+This guide walks through a complete Node.js/TypeScript integration with the Limitless Exchange API: authentication, market data, EIP-712 order signing with viem, order submission, and WebSocket subscriptions for real-time data.
+
+<Warning>
+  **Never expose your private key.** Use environment variables and never commit secrets to version control. For production, consider a dedicated key management solution.
+</Warning>
+
+## Prerequisites
+
+Install the required dependencies:
+
+<Tabs>
+  <Tab title="pnpm">
+```bash
+pnpm add socket.io-client cross-fetch ethers viem
+```
+  </Tab>
+  <Tab title="npm">
+```bash
+npm install socket.io-client cross-fetch ethers viem
+```
+  </Tab>
+  <Tab title="yarn">
+```bash
+yarn add socket.io-client cross-fetch ethers viem
+```
+  </Tab>
+</Tabs>
+
+| Package | Purpose |
+|---------|---------|
+| `socket.io-client` | WebSocket connection to real-time market data |
+| `cross-fetch` | HTTP requests (or use native `fetch` in Node 18+) |
+| `ethers` | Optional; viem handles EIP-712 signing |
+| `viem` | EIP-712 signing, wallet client, `parseUnits` |
+
+<Tip>
+  If using Node 18+, you can omit `cross-fetch` and use the built-in `fetch`.
+</Tip>
+
+## Environment Variables
+
+Create a `.env` file (and add it to `.gitignore`):
+
+```bash
+API_KEY=lmts_your_api_key_here
+PRIVATE_KEY=0x...
+API_URL=https://api.limitless.exchange
+OWNER_ID=12345
+```
+
+<Warning>
+  `OWNER_ID` is your Limitless profile ID (numeric). Obtain it from your account settings or from an authenticated API response. It is required for order submission.
+</Warning>
+
+## 1. Authentication
+
+All REST requests require the `X-API-Key` header. WebSocket connections pass the same key during the handshake.
+
+<CodeGroup>
+  ```typescript api.ts
+const API_URL = process.env.API_URL ?? 'https://api.limitless.exchange';
+const API_KEY = process.env.API_KEY;
+
+if (!API_KEY?.startsWith('lmts_')) {
+  throw new Error('Invalid or missing API_KEY. Get one at limitless.exchange → Api keys');
+}
+
+export async function apiGet<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: { 'X-API-Key': API_KEY },
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'X-API-Key': API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+  ```
+  ```bash curl
+# GET request
+curl -H "X-API-Key: lmts_your_key" https://api.limitless.exchange/markets/btc-100k-weekly
+
+# POST request
+curl -X POST -H "X-API-Key: lmts_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{"order":{...},"orderType":"GTC","marketSlug":"btc-100k-weekly","ownerId":12345}' \
+  https://api.limitless.exchange/orders
+  ```
+</CodeGroup>
+
+## 2. Fetching Market Data and Caching Venue Info
+
+Fetch market details via `GET /markets/:slug`. The response includes `venue` (exchange, adapter) and `positionIds` for CLOB markets.
+
+<Steps>
+
+<Step title="Fetch market by slug">
+  Call `GET /markets/{slug}` to retrieve market data including venue addresses.
+</Step>
+
+<Step title="Extract venue and position IDs">
+  Use `venue.exchange` as the EIP-712 `verifyingContract`. Use `positionIds[0]` for YES and `positionIds[1]` for NO.
+</Step>
+
+<Step title="Cache the venue">
+  Venue data is static per market. Fetch once and reuse for all orders on that market.
+</Step>
+
+</Steps>
+
+```typescript
+interface Venue {
+  exchange: string;
+  adapter: string;
+}
+
+interface ClobMarket {
+  slug: string;
+  venue: Venue;
+  positionIds: [string, string];  // [YES, NO]
+}
+
+export async function getMarket(slug: string): Promise<ClobMarket> {
+  const data = await apiGet<ClobMarket & { position_ids?: string[] }>(`/markets/${slug}`);
+  const positionIds = (data.positionIds ?? data.position_ids ?? []) as [string, string];
+  if (!data.venue?.exchange || positionIds.length < 2) {
+    throw new Error(`Market ${slug} is not a CLOB market or missing venue data`);
+  }
+  return { ...data, positionIds };
+}
+```
+
+<Note>
+  For markets that use `position_ids` (snake_case) in the API response, map to `positionIds` in your code. The first element is YES, the second is NO.
+</Note>
+
+## 3. Creating Signed Orders with viem (EIP-712)
+
+Build the order payload and sign it with viem's `signTypedData`. The domain uses `venue.exchange` as `verifyingContract`.
+
+### EIP-712 Domain and Types
+
+```typescript
+import { createWalletClient, http, privateKeyToAccount } from 'viem';
+import { base } from 'viem/chains';
+import { parseUnits } from 'viem';
+
+const chainId = 8453;  // Base
+
+const orderType = {
+  Order: [
+    { name: 'salt', type: 'uint256' },
+    { name: 'maker', type: 'address' },
+    { name: 'signer', type: 'address' },
+    { name: 'taker', type: 'address' },
+    { name: 'tokenId', type: 'uint256' },
+    { name: 'makerAmount', type: 'uint256' },
+    { name: 'takerAmount', type: 'uint256' },
+    { name: 'expiration', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'feeRateBps', type: 'uint256' },
+    { name: 'side', type: 'uint8' },
+    { name: 'signatureType', type: 'uint8' },
+  ],
+} as const;
+```
+
+### Signing Logic
+
+```typescript
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+export async function createSignedOrder(params: {
+  market: ClobMarket;
+  side: 0 | 1;           // 0 = BUY, 1 = SELL
+  outcome: 'yes' | 'no'; // positionIds[0]=YES, positionIds[1]=NO
+  priceCents: number;    // e.g. 65 = $0.65
+  shares: number;       // number of shares
+  orderType: 'GTC' | 'FOK';
+  nonce: number;
+}): Promise<{ order: Record<string, unknown>; signature: string }> {
+  const { market, side, outcome, priceCents, shares, nonce } = params;
+  const privateKey = process.env.PRIVATE_KEY as `0x${string}`;
+  if (!privateKey) throw new Error('PRIVATE_KEY required');
+
+  const account = privateKeyToAccount(privateKey);
+  const walletClient = createWalletClient({
+    account,
+    chain: base,
+    transport: http(),
+  });
+
+  const tokenId = outcome === 'yes' ? market.positionIds[0] : market.positionIds[1];
+  const price = priceCents / 100;
+  const sharesScaled = parseUnits(shares.toString(), 6);
+  const makerAmount = side === 0
+    ? parseUnits((price * shares).toFixed(6), 6)  // BUY: offer USDC
+    : sharesScaled;                                 // SELL: offer shares
+  const takerAmount = side === 0
+    ? sharesScaled                                  // BUY: want shares
+    : parseUnits((price * shares).toFixed(6), 6);   // SELL: want USDC
+
+  const salt = BigInt(Date.now());
+  const expiration = 0n;
+
+  const order = {
+    salt,
+    maker: account.address,
+    signer: account.address,
+    taker: ZERO_ADDRESS,
+    tokenId: BigInt(tokenId),
+    makerAmount,
+    takerAmount,
+    expiration,
+    nonce: BigInt(nonce),
+    feeRateBps: 0n,
+    side: params.side as 0 | 1,
+    signatureType: 0,  // EOA
+  };
+
+  const domain = {
+    name: 'Limitless CTF Exchange',
+    version: '1',
+    chainId,
+    verifyingContract: market.venue.exchange as `0x${string}`,
+  };
+
+  const signature = await walletClient.signTypedData({
+    domain,
+    types: orderType,
+    primaryType: 'Order',
+    message: order,
+  });
+
+  return {
+    order: {
+      salt: Number(order.salt),
+      maker: account.address,
+      signer: account.address,
+      taker: ZERO_ADDRESS,
+      tokenId: tokenId,
+      makerAmount: Number(order.makerAmount),
+      takerAmount: Number(order.takerAmount),
+      expiration: 0,
+      nonce: Number(order.nonce),
+      feeRateBps: 0,
+      side: params.side,
+      signatureType: 0,
+      signature,
+    },
+    signature,
+  };
+}
+```
+
+<Note>
+  USDC uses 6 decimals. Use `parseUnits(value, 6)` for amounts. Prices are in dollars; multiply `price * shares` before scaling.
+</Note>
+
+## 4. Submitting Orders
+
+Submit the signed order to `POST /orders` with `order`, `orderType`, `marketSlug`, and `ownerId`.
+
+```typescript
+interface CreateOrderPayload {
+  order: Record<string, unknown>;
+  orderType: 'GTC' | 'FOK';
+  marketSlug: string;
+  ownerId: number;
+}
+
+export async function submitOrder(payload: CreateOrderPayload) {
+  return apiPost<{ order: unknown; makerMatches?: unknown[] }>('/orders', payload);
+}
+
+// Example usage
+const market = await getMarket('btc-100k-weekly');
+const { order } = await createSignedOrder({
+  market,
+  side: 0,           // BUY
+  outcome: 'yes',
+  priceCents: 65,
+  shares: 10,
+  orderType: 'GTC',
+  nonce: 0,
+});
+
+const result = await submitOrder({
+  order,
+  orderType: 'GTC',
+  marketSlug: market.slug,
+  ownerId: Number(process.env.OWNER_ID),
+});
+```
+
+## 5. WebSocket Subscription for Real-Time Data
+
+Connect to `wss://ws.limitless.exchange` with namespace `/markets` using `socket.io-client`. Emit `subscribe_market_prices` with `marketAddresses` and/or `marketSlugs`.
+
+<Warning>
+  Subscriptions **replace** previous ones. To subscribe to both AMM (by address) and CLOB (by slug), send both `marketAddresses` and `marketSlugs` in a single `subscribe_market_prices` call.
+</Warning>
+
+```typescript
+import { io } from 'socket.io-client';
+
+const WS_URL = 'wss://ws.limitless.exchange';
+const NAMESPACE = '/markets';
+
+const socket = io(`${WS_URL}${NAMESPACE}`, {
+  transports: ['websocket'],
+  extraHeaders: {
+    'X-API-Key': process.env.API_KEY ?? '',
+  },
+});
+
+socket.on('connect', () => {
+  socket.emit('subscribe_market_prices', {
+    marketAddresses: ['0x1234...'],   // AMM markets
+    marketSlugs: ['btc-100k-weekly'], // CLOB markets
+  });
+});
+
+socket.on('newPriceData', (data: { marketAddress: string; updatedPrices: { yes: string; no: string } }) => {
+  console.log('AMM price update:', data.marketAddress, data.updatedPrices);
+});
+
+socket.on('orderbookUpdate', (data: { marketSlug: string; orderbook: unknown }) => {
+  console.log('CLOB orderbook update:', data.marketSlug);
+});
+
+socket.on('disconnect', (reason) => {
+  console.log('Disconnected:', reason);
+});
+```
+
+| Event | Description |
+|-------|-------------|
+| `newPriceData` | AMM market price update |
+| `orderbookUpdate` | CLOB orderbook update |
+
+## Complete End-to-End Example
+
+<CodeGroup>
+  ```typescript index.ts
+import { getMarket } from './market';
+import { createSignedOrder } from './orders';
+import { submitOrder } from './submit';
+import { io } from 'socket.io-client';
+
+const API_KEY = process.env.API_KEY!;
+const WS_URL = 'wss://ws.limitless.exchange';
+
+async function main() {
+  const marketSlug = process.argv[2] ?? 'btc-100k-weekly';
+  const market = await getMarket(marketSlug);
+  console.log('Market:', market.slug, 'Venue:', market.venue.exchange);
+
+  const { order } = await createSignedOrder({
+    market,
+    side: 0,
+    outcome: 'yes',
+    priceCents: 65,
+    shares: 5,
+    orderType: 'GTC',
+    nonce: 0,
+  });
+
+  const result = await submitOrder({
+    order,
+    orderType: 'GTC',
+    marketSlug: market.slug,
+    ownerId: Number(process.env.OWNER_ID),
+  });
+  console.log('Order submitted:', result);
+
+  const socket = io(`${WS_URL}/markets`, {
+    transports: ['websocket'],
+    extraHeaders: { 'X-API-Key': API_KEY },
+  });
+
+  socket.on('connect', () => {
+    socket.emit('subscribe_market_prices', { marketSlugs: [marketSlug] });
+  });
+
+  socket.on('orderbookUpdate', (data) => {
+    console.log('Orderbook:', data);
+  });
+}
+
+main().catch(console.error);
+  ```
+  ```typescript minimal.ts
+// Minimal: fetch market, sign order, submit
+const market = await getMarket('btc-100k-weekly');
+const { order } = await createSignedOrder({
+  market, side: 0, outcome: 'yes', priceCents: 65, shares: 5, orderType: 'GTC', nonce: 0,
+});
+await submitOrder({ order, orderType: 'GTC', marketSlug: market.slug, ownerId: Number(process.env.OWNER_ID) });
+  ```
+</CodeGroup>
+
+## Reference Summary
+
+| Item | Value |
+|------|-------|
+| API base URL | `https://api.limitless.exchange` |
+| WebSocket URL | `wss://ws.limitless.exchange` |
+| Namespace | `/markets` |
+| Chain | Base (chainId: 8453) |
+| EIP-712 domain name | `Limitless CTF Exchange` |
+| EIP-712 version | `1` |
+| USDC decimals | 6 |
+| Side | 0 = BUY, 1 = SELL |
+| signatureType | 0 = EOA |
+| Order types | GTC, FOK |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="EIP-712 Signing" icon="pen" href="/developers/eip712-signing">
+    Deep dive into order structure and signing.
+  </Card>
+  <Card title="Venue System" icon="building" href="/developers/venue-system">
+    Token approvals and venue addresses.
+  </Card>
+  <Card title="WebSocket Events" icon="plug" href="/developers/websocket-events">
+    Full event reference for real-time data.
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Complete endpoint documentation.
+  </Card>
+</CardGroup>

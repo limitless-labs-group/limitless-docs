@@ -1,0 +1,73 @@
+---
+title: "Authentication"
+description: "API key authentication for the Limitless Exchange API"
+---
+
+## API Key Authentication
+
+All programmatic access to the Limitless Exchange API requires an **API key**.
+
+<Warning>
+  Cookie-based session authentication is **deprecated** and will be removed soon. Migrate to API keys immediately.
+</Warning>
+
+## Getting an API Key
+
+<Steps>
+
+<Step title="Log in to Limitless Exchange">
+  Go to [limitless.exchange](https://limitless.exchange) and connect your wallet.
+</Step>
+
+<Step title="Open API key settings">
+  Click your **profile menu** (top right) → select **"Api keys"**.
+</Step>
+
+<Step title="Generate a new key">
+  Create a new key. It will start with `lmts_...`.
+</Step>
+
+</Steps>
+
+## Using Your API Key
+
+Include the key in all requests via the `X-API-Key` header:
+
+```bash
+# REST API
+curl -H "X-API-Key: lmts_your_key_here" https://api.limitless.exchange/markets
+
+# WebSocket - pass as header during connection handshake
+```
+
+## Authentication Methods
+
+| Method | Header | Status |
+|--------|--------|--------|
+| API Key | `X-API-Key: lmts_...` | **Required** for programmatic access |
+| Cookie Session | `Cookie: limitless_session=...` | **Deprecated** (removal imminent) |
+
+## Migration from Cookie to API Key
+
+```diff
+# Before (deprecated)
+- Cookie: limitless_session=your_session_token
+
+# After (recommended)
++ X-API-Key: lmts_your_key_here
+```
+
+No more login flow or cookie handling needed.
+
+## Checksummed Addresses
+
+All Ethereum addresses in API requests must use **checksummed format** (EIP-55 mixed-case):
+
+- `x-account` header
+- `maker` and `signer` fields in orders
+
+**Example:** `0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed`
+
+<Note>
+  Your private key is still required for **EIP-712 order signing**, but the API key handles request authentication.
+</Note>

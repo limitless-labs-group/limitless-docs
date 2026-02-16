@@ -1,0 +1,143 @@
+---
+title: "TypeScript SDK"
+description: "Official TypeScript SDK for the Limitless Exchange API"
+---
+
+## Overview
+
+The Limitless Exchange TypeScript SDK provides a type-safe client for interacting with both **CLOB** and **NegRisk** prediction markets. It handles authentication, EIP-712 order signing, market data fetching, portfolio tracking, and real-time WebSocket streaming out of the box.
+
+<Note>
+  Source code and issue tracker are available on [GitHub](https://github.com/limitless-labs-group/limitless-exchange-ts-sdk).
+</Note>
+
+## Installation
+
+<Tabs>
+  <Tab title="npm">
+```bash
+npm install @limitless-exchange/sdk
+```
+  </Tab>
+  <Tab title="yarn">
+```bash
+yarn add @limitless-exchange/sdk
+```
+  </Tab>
+  <Tab title="pnpm">
+```bash
+pnpm add @limitless-exchange/sdk
+```
+  </Tab>
+</Tabs>
+
+## Quick Start
+
+<Steps>
+
+<Step title="Configure environment variables">
+  Create a `.env` file in your project root (and add it to `.gitignore`):
+
+```bash
+LIMITLESS_API_KEY=lmts_your_api_key_here
+PRIVATE_KEY=0xYourPrivateKeyHere
+```
+
+  The SDK automatically reads `LIMITLESS_API_KEY` from the environment if no `apiKey` is passed to the constructor.
+</Step>
+
+<Step title="Initialize the HTTP client">
+```typescript
+import { HttpClient } from '@limitless-exchange/sdk';
+
+const httpClient = new HttpClient({
+  baseURL: 'https://api.limitless.exchange',
+});
+```
+</Step>
+
+<Step title="Fetch active markets">
+```typescript
+import { MarketFetcher } from '@limitless-exchange/sdk';
+
+const marketFetcher = new MarketFetcher(httpClient);
+
+const markets = await marketFetcher.getActiveMarkets({
+  limit: 10,
+  sortBy: 'newest',
+});
+
+for (const market of markets) {
+  console.log(market.slug, market.title);
+}
+```
+</Step>
+
+<Step title="Authenticate for trading">
+  For operations that require authentication (placing orders, fetching portfolio), supply your API key and wallet:
+
+```typescript
+import { ethers } from 'ethers';
+
+const httpClient = new HttpClient({
+  baseURL: 'https://api.limitless.exchange',
+  apiKey: process.env.LIMITLESS_API_KEY,
+});
+
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY!);
+```
+</Step>
+
+</Steps>
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `LIMITLESS_API_KEY` | For authenticated endpoints | Auto-loaded by the SDK. Generate at [limitless.exchange](https://limitless.exchange) under profile menu. |
+| `PRIVATE_KEY` | For order signing | Ethereum private key used for EIP-712 order signatures. Never commit to version control. |
+
+## HttpClient Constructor
+
+The `HttpClient` accepts the following options:
+
+```typescript
+const httpClient = new HttpClient({
+  baseURL: 'https://api.limitless.exchange',
+  apiKey: 'lmts_...',         // Optional: auto-reads LIMITLESS_API_KEY from env
+  timeout: 30_000,            // Optional: request timeout in ms (default: 30000)
+  additionalHeaders: {        // Optional: extra headers for every request
+    'X-Custom-Header': 'value',
+  },
+});
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `baseURL` | `string` | -- | API base URL |
+| `apiKey` | `string` | `process.env.LIMITLESS_API_KEY` | API key for authentication |
+| `timeout` | `number` | `30000` | Request timeout in milliseconds |
+| `additionalHeaders` | `Record<string, string>` | `{}` | Additional headers sent with every request |
+
+## What You Can Build
+
+<CardGroup cols={2}>
+  <Card title="Markets" icon="chart-line" href="/developers/sdk/typescript/markets">
+    Discover markets, fetch orderbooks, and query NegRisk groups.
+  </Card>
+  <Card title="Trading and Orders" icon="arrow-right-arrow-left" href="/developers/sdk/typescript/orders">
+    Create GTC and FOK orders, manage approvals, and cancel orders.
+  </Card>
+  <Card title="Portfolio and Positions" icon="wallet" href="/developers/sdk/typescript/portfolio">
+    Track CLOB and AMM positions, PnL, and trade history.
+  </Card>
+  <Card title="WebSocket Streaming" icon="plug" href="/developers/sdk/typescript/websocket">
+    Real-time orderbook, price, position, and transaction events.
+  </Card>
+</CardGroup>
+
+## Disclaimer
+
+<Warning>
+  **USE AT YOUR OWN RISK.** This SDK and the Limitless Exchange protocol are provided as-is with no warranties. You are solely responsible for any funds used or lost. By using this SDK, you acknowledge that prediction markets involve financial risk. The Limitless Exchange is not available to users in the United States or other restricted jurisdictions. Ensure compliance with your local laws before trading.
+</Warning>

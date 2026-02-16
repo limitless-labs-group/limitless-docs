@@ -1,0 +1,79 @@
+---
+title: "EIP-712 Order Signing"
+description: "How to sign orders using EIP-712 structured data"
+---
+
+## Overview
+
+All orders on Limitless are signed using **EIP-712 structured data**. The venue's exchange address is used as the `verifyingContract` in the signing domain.
+
+## EIP-712 Domain
+
+```json
+{
+  "name": "Limitless CTF Exchange",
+  "version": "1",
+  "chainId": 8453,
+  "verifyingContract": "<venue.exchange address>"
+}
+```
+
+<Note>
+  The `verifyingContract` must be fetched from the market's venue data via `GET /markets/:slug`. See [Venue System](/developers/venue-system).
+</Note>
+
+## Order Type Definition
+
+```json
+{
+  "Order": [
+    { "name": "salt", "type": "uint256" },
+    { "name": "maker", "type": "address" },
+    { "name": "signer", "type": "address" },
+    { "name": "taker", "type": "address" },
+    { "name": "tokenId", "type": "uint256" },
+    { "name": "makerAmount", "type": "uint256" },
+    { "name": "takerAmount", "type": "uint256" },
+    { "name": "expiration", "type": "uint256" },
+    { "name": "nonce", "type": "uint256" },
+    { "name": "feeRateBps", "type": "uint256" },
+    { "name": "side", "type": "uint8" },
+    { "name": "signatureType", "type": "uint8" }
+  ]
+}
+```
+
+## Field Reference
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `salt` | uint256 | Unique order identifier (typically timestamp-based) |
+| `maker` | address | Checksummed address of the order creator |
+| `signer` | address | Same as maker for EOA wallets |
+| `taker` | address | `0x000...000` for open orders (any taker) |
+| `tokenId` | uint256 | Position ID — YES or NO token from market data |
+| `makerAmount` | uint256 | Amount the maker offers (USDC scaled by 1e6) |
+| `takerAmount` | uint256 | Amount the maker wants in return (shares scaled by 1e6) |
+| `expiration` | uint256 | `0` for no expiration |
+| `nonce` | uint256 | Order nonce |
+| `feeRateBps` | uint256 | Fee rate in basis points |
+| `side` | uint8 | `0` = BUY, `1` = SELL |
+| `signatureType` | uint8 | `0` = EOA signature |
+
+## Order Types
+
+| Type | Description |
+|------|-------------|
+| **GTC** (Good Till Cancelled) | Remains active until filled or cancelled |
+| **FOK** (Fill or Kill) | Must fill completely or be cancelled |
+
+## Amount Calculation
+
+- USDC has **6 decimals** (1 USDC = 1,000,000 units)
+- Shares are scaled by **1e6** for precision
+- Prices are in **cents** (e.g., 65 = 65c = &#36;0.65)
+
+```
+makerAmount = priceInDollars * numberOfShares * 1e6
+takerAmount = numberOfShares * 1e6
+```

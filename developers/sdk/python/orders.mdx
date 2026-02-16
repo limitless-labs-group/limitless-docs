@@ -1,0 +1,310 @@
+---
+title: "Trading & Orders"
+description: "Create and manage orders with the Python SDK"
+---
+
+## Overview
+
+The `OrderClient` handles order creation, EIP-712 signing, and order management. It supports both Good-Till-Cancelled (GTC) limit orders and Fill-or-Kill (FOK) market orders.
+
+## Prerequisites
+
+Before placing orders, you need four components:
+
+```python
+import asyncio
+from eth_account import Account
+from limitless.http_client import HttpClient
+from limitless.market_fetcher import MarketFetcher
+from limitless.order_client import OrderClient, Side, OrderType
+
+http_client = HttpClient()  # loads LIMITLESS_API_KEY from env
+account = Account.from_key("0xYOUR_PRIVATE_KEY")
+market_fetcher = MarketFetcher(http_client)
+order_client = OrderClient(http_client, account)
+```
+
+| Component | Purpose |
+|-----------|---------|
+| `HttpClient` | Authenticated HTTP client for API requests |
+| `Account` | eth-account wallet for EIP-712 order signing |
+| `MarketFetcher` | Fetches market data and caches venue addresses |
+| `OrderClient` | Creates, signs, and submits orders |
+
+<Note>
+  The `OrderClient` constructor automatically fetches your user profile data (`userData`) from the API. This is used to populate the `ownerId` field on submitted orders.
+</Note>
+
+## Token Approvals
+
+Before your first trade on a given venue, you must approve the exchange contracts to spend your tokens. This is a **one-time on-chain setup** per venue.
+
+<Tabs>
+  <Tab title="Standard CLOB">
+    For standard CLOB markets, approve USDC and Conditional Tokens to the **exchange** contract:
+
+    ```python
+    from web3 import Web3
+
+    w3 = Web3(Web3.HTTPProvider("https://mainnet.base.org"))
+
+    USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+    CT_ADDRESS = "0x..."  # Conditional Token framework address
+
+    market = await market_fetcher.get_market("your-market-slug")
+    exchange = market.venue.exchange
+
+    # Approve USDC for BUY orders
+    usdc_contract = w3.eth.contract(
+        address=Web3.to_checksum_address(USDC_ADDRESS),
+        abi=[{
+            "name": "approve",
+            "type": "function",
+            "inputs": [
+                {"name": "spender", "type": "address"},
+                {"name": "amount", "type": "uint256"},
+            ],
+            "outputs": [{"name": "", "type": "bool"}],
+        }],
+    )
+    tx = usdc_contract.functions.approve(
+        Web3.to_checksum_address(exchange),
+        2**256 - 1,  # max approval
+    ).build_transaction({
+        "from": account.address,
+        "nonce": w3.eth.get_transaction_count(account.address),
+    })
+    signed = w3.eth.account.sign_transaction(tx, account.key)
+    w3.eth.send_raw_transaction(signed.raw_transaction)
+
+    # Approve Conditional Tokens for SELL orders
+    ct_contract = w3.eth.contract(
+        address=Web3.to_checksum_address(CT_ADDRESS),
+        abi=[{
+            "name": "setApprovalForAll",
+            "type": "function",
+            "inputs": [
+                {"name": "operator", "type": "address"},
+                {"name": "approved", "type": "bool"},
+            ],
+            "outputs": [],
+        }],
+    )
+    tx = ct_contract.functions.setApprovalForAll(
+        Web3.to_checksum_address(exchange),
+        True,
+    ).build_transaction({
+        "from": account.address,
+        "nonce": w3.eth.get_transaction_count(account.address),
+    })
+    signed = w3.eth.account.sign_transaction(tx, account.key)
+    w3.eth.send_raw_transaction(signed.raw_transaction)
+    ```
+  </Tab>
+  <Tab title="NegRisk">
+    For NegRisk markets, you must additionally approve the **adapter** contract:
+
+    ```python
+    market = await market_fetcher.get_market("your-negrisk-slug")
+    exchange = market.venue.exchange
+    adapter = market.venue.adapter
+
+    # 1. Approve USDC to the exchange (same as CLOB)
+    # ... (see Standard CLOB tab)
+
+    # 2. Approve Conditional Tokens to the exchange
+    # ... (see Standard CLOB tab)
+
+    # 3. Approve Conditional Tokens to the adapter (NegRisk only)
+    tx = ct_contract.functions.setApprovalForAll(
+        Web3.to_checksum_address(adapter),
+        True,
+    ).build_transaction({
+        "from": account.address,
+        "nonce": w3.eth.get_transaction_count(account.address),
+    })
+    signed = w3.eth.account.sign_transaction(tx, account.key)
+    w3.eth.send_raw_transaction(signed.raw_transaction)
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Approvals are on-chain transactions that cost gas. You only need to perform them once per venue. Use `venue.exchange` for both CLOB and NegRisk, and additionally `venue.adapter` for NegRisk markets.
+</Warning>
+
+## GTC Orders (Good-Till-Cancelled)
+
+GTC orders remain on the orderbook until filled or explicitly cancelled. Specify `price` (in dollars) and `size` (number of shares):
+
+```python
+market = await market_fetcher.get_market("btc-above-100k-march-2025")
+
+result = await order_client.create_order(
+    token_id=market.tokens.yes,
+    price=0.65,
+    size=10.0,
+    side=Side.BUY,
+    order_type=OrderType.GTC,
+    market_slug="btc-above-100k-march-2025",
+)
+print("Order placed:", result)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `token_id` | `str` | Token ID from `market.tokens.yes` or `market.tokens.no` |
+| `price` | `float` | Price per share in dollars (0.01 to 0.99) |
+| `size` | `float` | Number of shares to buy or sell |
+| `side` | `Side` | `Side.BUY` or `Side.SELL` |
+| `order_type` | `OrderType` | `OrderType.GTC` |
+| `market_slug` | `str` | Market slug for venue lookup |
+
+## FOK Orders (Fill-or-Kill)
+
+FOK orders execute immediately and fully, or are rejected entirely. Instead of `price` and `size`, you specify `maker_amount`:
+
+<Tabs>
+  <Tab title="FOK BUY">
+    When buying, `maker_amount` is the **total USDC you want to spend**. The exchange fills as many shares as possible at the best available price:
+
+    ```python
+    result = await order_client.create_order(
+        token_id=market.tokens.yes,
+        maker_amount=10.0,  # spend 10 USDC
+        side=Side.BUY,
+        order_type=OrderType.FOK,
+        market_slug="btc-above-100k-march-2025",
+    )
+    ```
+  </Tab>
+  <Tab title="FOK SELL">
+    When selling, `maker_amount` is the **number of shares to sell**. The exchange returns USDC at the best available price:
+
+    ```python
+    result = await order_client.create_order(
+        token_id=market.tokens.yes,
+        maker_amount=10.0,  # sell 10 shares
+        side=Side.SELL,
+        order_type=OrderType.FOK,
+        market_slug="btc-above-100k-march-2025",
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Cancelling Orders
+
+<Tabs>
+  <Tab title="Cancel a single order">
+    Cancel a specific order by its ID:
+
+    ```python
+    await order_client.cancel(order_id="abc123-def456")
+    ```
+  </Tab>
+  <Tab title="Cancel all orders on a market">
+    Cancel every open order you have on a given market:
+
+    ```python
+    await order_client.cancel_all(market_slug="btc-above-100k-march-2025")
+    ```
+  </Tab>
+</Tabs>
+
+## Enums Reference
+
+### Side
+
+| Value | Description |
+|-------|-------------|
+| `Side.BUY` | Buy shares with USDC |
+| `Side.SELL` | Sell shares for USDC |
+
+### OrderType
+
+| Value | Description |
+|-------|-------------|
+| `OrderType.GTC` | Good-Till-Cancelled limit order (rests on the book) |
+| `OrderType.FOK` | Fill-or-Kill market order (fills immediately or rejects) |
+
+## Error Handling
+
+The SDK raises `APIError` for non-2xx responses. Always wrap order calls in try/except:
+
+```python
+from limitless.exceptions import APIError
+
+try:
+    result = await order_client.create_order(
+        token_id=market.tokens.yes,
+        price=0.65,
+        size=10.0,
+        side=Side.BUY,
+        order_type=OrderType.GTC,
+        market_slug="btc-above-100k-march-2025",
+    )
+except APIError as e:
+    print(f"Order failed — status {e.status_code}: {e.message}")
+```
+
+<Note>
+  See [Error Handling & Retry](/developers/sdk/python/error-handling) for details on `APIError` fields and the `@retry_on_errors` decorator.
+</Note>
+
+## Complete Example
+
+```python
+import asyncio
+from eth_account import Account
+from limitless.http_client import HttpClient
+from limitless.market_fetcher import MarketFetcher
+from limitless.order_client import OrderClient, Side, OrderType
+from limitless.exceptions import APIError
+
+async def main():
+    http_client = HttpClient()
+    account = Account.from_key("0xYOUR_PRIVATE_KEY")
+    market_fetcher = MarketFetcher(http_client)
+    order_client = OrderClient(http_client, account)
+
+    try:
+        # Fetch market (caches venue automatically)
+        market = await market_fetcher.get_market("btc-above-100k-march-2025")
+
+        # Place a GTC BUY order for 10 YES shares at $0.65
+        result = await order_client.create_order(
+            token_id=market.tokens.yes,
+            price=0.65,
+            size=10.0,
+            side=Side.BUY,
+            order_type=OrderType.GTC,
+            market_slug="btc-above-100k-march-2025",
+        )
+        print("GTC order placed:", result)
+
+        # Place a FOK BUY order spending 5 USDC
+        fok_result = await order_client.create_order(
+            token_id=market.tokens.yes,
+            maker_amount=5.0,
+            side=Side.BUY,
+            order_type=OrderType.FOK,
+            market_slug="btc-above-100k-march-2025",
+        )
+        print("FOK order placed:", fok_result)
+
+        # Cancel all orders on this market
+        await order_client.cancel_all(market_slug="btc-above-100k-march-2025")
+        print("All orders cancelled")
+
+    except APIError as e:
+        print(f"API error — status {e.status_code}: {e.message}")
+    finally:
+        await http_client.close()
+
+asyncio.run(main())
+```
+
+<Warning>
+  Always call `await http_client.close()` when finished. Failing to close the client can leave open connections and cause resource leaks.
+</Warning>

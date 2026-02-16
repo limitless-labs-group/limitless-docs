@@ -1,0 +1,171 @@
+---
+title: "Markets"
+description: "Market discovery and orderbook data with the Python SDK"
+---
+
+## Overview
+
+The `MarketFetcher` class handles market discovery, individual market lookups, and orderbook retrieval. It also automatically caches venue contract addresses needed for order signing.
+
+## Setup
+
+```python
+from limitless.http_client import HttpClient
+from limitless.market_fetcher import MarketFetcher
+
+http_client = HttpClient()  # loads LIMITLESS_API_KEY from env
+market_fetcher = MarketFetcher(http_client)
+```
+
+## Fetching Active Markets
+
+Use `get_active_markets()` to retrieve a paginated list of all active markets:
+
+```python
+params = {
+    "page": 1,
+    "limit": 10,
+    "sortBy": "volume",
+}
+result = await market_fetcher.get_active_markets(params)
+
+for market in result["data"]:
+    print(market["title"], market["slug"])
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `page` | `int` | `1` | Page number for pagination |
+| `limit` | `int` | `10` | Number of markets per page |
+| `sortBy` | `str` | `"volume"` | Sort order (e.g. `"volume"`, `"createdAt"`) |
+
+<Tip>
+  Use pagination parameters to avoid large responses. Start with a small `limit` and increment `page` as needed.
+</Tip>
+
+## Fetching a Single Market
+
+Use `get_market(slug)` to retrieve full details for a specific market:
+
+```python
+market = await market_fetcher.get_market("btc-above-100k-march-2025")
+
+print(market.title)
+print("YES token:", market.tokens.yes)
+print("NO token:", market.tokens.no)
+print("Exchange:", market.venue.exchange)
+print("Adapter:", market.venue.adapter)
+```
+
+The returned `Market` object is a Pydantic model with the following key fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | `str` | Human-readable market title |
+| `slug` | `str` | URL-friendly market identifier |
+| `tokens.yes` | `str` | Token ID for the YES outcome |
+| `tokens.no` | `str` | Token ID for the NO outcome |
+| `venue.exchange` | `str` | Exchange contract address (used as EIP-712 `verifyingContract`) |
+| `venue.adapter` | `str` | Adapter contract address (used for NegRisk token approvals) |
+
+<Note>
+  Token IDs are returned as **strings**. Pass them directly to `OrderClient.create_order()` as `token_id`.
+</Note>
+
+## Fetching the Orderbook
+
+Use `get_orderbook(slug)` to retrieve current bids and asks for a market:
+
+```python
+orderbook = await market_fetcher.get_orderbook("btc-above-100k-march-2025")
+
+print("Bids:")
+for bid in orderbook["bids"]:
+    print(f"  Price: {bid['price']}  Size: {bid['size']}")
+
+print("Asks:")
+for ask in orderbook["asks"]:
+    print(f"  Price: {ask['price']}  Size: {ask['size']}")
+```
+
+## Venue Caching
+
+Every call to `get_market()` automatically caches the venue contract addresses (exchange and adapter) for that market. The `OrderClient` reads from this cache when signing orders, so you do not need to manage venues manually.
+
+<Steps>
+
+<Step title="Fetch the market">
+  Calling `get_market(slug)` retrieves and caches the venue:
+
+  ```python
+  market = await market_fetcher.get_market("btc-above-100k-march-2025")
+  # Venue is now cached for this slug
+  ```
+</Step>
+
+<Step title="Place an order">
+  The `OrderClient` automatically looks up the cached venue when you pass `market_slug`:
+
+  ```python
+  await order_client.create_order(
+      token_id=market.tokens.yes,
+      price=0.65,
+      size=10.0,
+      side=Side.BUY,
+      order_type=OrderType.GTC,
+      market_slug="btc-above-100k-march-2025",
+  )
+  ```
+</Step>
+
+</Steps>
+
+<Warning>
+  You **must** call `get_market(slug)` at least once before placing orders on that market. Without a cached venue, the `OrderClient` cannot determine the correct `verifyingContract` for EIP-712 signing.
+</Warning>
+
+## Debugging Venue Cache
+
+Enable `DEBUG` logging to see venue cache operations:
+
+```python
+from limitless.logger import ConsoleLogger, LogLevel
+
+logger = ConsoleLogger(level=LogLevel.DEBUG)
+
+# Output will include lines like:
+# [DEBUG] Venue cached for btc-above-100k-march-2025: exchange=0xA1b2... adapter=0xD4e5...
+# [DEBUG] Venue cache hit for btc-above-100k-march-2025
+```
+
+## Complete Example
+
+```python
+import asyncio
+from limitless.http_client import HttpClient
+from limitless.market_fetcher import MarketFetcher
+
+async def main():
+    http_client = HttpClient()
+    market_fetcher = MarketFetcher(http_client)
+
+    # List active markets
+    active = await market_fetcher.get_active_markets({"limit": 5})
+    for m in active["data"]:
+        print(f"{m['title']} — {m['slug']}")
+
+    # Get a specific market
+    slug = active["data"][0]["slug"]
+    market = await market_fetcher.get_market(slug)
+    print(f"\nMarket: {market.title}")
+    print(f"YES token: {market.tokens.yes}")
+    print(f"NO token:  {market.tokens.no}")
+
+    # Fetch the orderbook
+    orderbook = await market_fetcher.get_orderbook(slug)
+    print(f"\nOrderbook — {len(orderbook['bids'])} bids, {len(orderbook['asks'])} asks")
+
+    await http_client.close()
+
+asyncio.run(main())
+```

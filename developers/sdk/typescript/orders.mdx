@@ -1,0 +1,292 @@
+---
+title: "Trading & Orders"
+description: "Create and manage orders with the TypeScript SDK"
+---
+
+## Prerequisites
+
+Before placing orders, initialize the required clients:
+
+```typescript
+import { ethers } from 'ethers';
+import {
+  HttpClient,
+  MarketFetcher,
+  OrderClient,
+} from '@limitless-exchange/sdk';
+
+const httpClient = new HttpClient({
+  baseURL: 'https://api.limitless.exchange',
+  apiKey: process.env.LIMITLESS_API_KEY,
+});
+
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY!);
+const marketFetcher = new MarketFetcher(httpClient);
+
+const orderClient = new OrderClient({
+  httpClient,
+  wallet,
+  marketFetcher, // Optional: enables venue caching for faster order creation
+});
+```
+
+## OrderClient Constructor
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `httpClient` | `HttpClient` | Yes | Authenticated HTTP client |
+| `wallet` | `ethers.Wallet` | Yes | Wallet for EIP-712 signing |
+| `marketFetcher` | `MarketFetcher` | No | Enables automatic venue caching. If omitted, venue data is fetched on each order. |
+
+<Note>
+  The `OrderClient` automatically fetches your user profile data (including `ownerId`) from the API on the first order. You do not need to supply it manually.
+</Note>
+
+## Token Approvals
+
+Before trading, your wallet must approve the relevant venue contracts to spend USDC and conditional tokens. This is a one-time setup per venue.
+
+### Approval Requirements
+
+| Market Type | USDC Approval | Conditional Token Approval |
+|-------------|--------------|---------------------------|
+| CLOB | Venue `exchange` contract | Venue `exchange` contract |
+| NegRisk | NegRisk `exchange` contract | NegRisk `exchange` contract |
+
+### Manual Approval with ethers
+
+```typescript
+import { ethers } from 'ethers';
+
+const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'; // USDC on Base
+const ERC20_ABI = [
+  'function approve(address spender, uint256 amount) returns (bool)',
+];
+const ERC1155_ABI = [
+  'function setApprovalForAll(address operator, bool approved)',
+];
+
+const provider = new ethers.JsonRpcProvider('https://mainnet.base.org');
+const signer = new ethers.Wallet(process.env.PRIVATE_KEY!, provider);
+
+async function approveVenue(venueExchange: string) {
+  const usdc = new ethers.Contract(USDC_ADDRESS, ERC20_ABI, signer);
+  const tx1 = await usdc.approve(venueExchange, ethers.MaxUint256);
+  await tx1.wait();
+  console.log('USDC approved for', venueExchange);
+}
+```
+
+<Tip>
+  Run approvals once per venue. After approval, all subsequent orders on markets using that venue work without additional on-chain transactions.
+</Tip>
+
+## GTC Orders (Good-Til-Cancelled)
+
+GTC orders remain on the orderbook until filled, cancelled, or the market resolves. Specify `price` (probability between 0 and 1) and `size` (whole number of shares).
+
+### Buy YES shares
+
+```typescript
+const market = await marketFetcher.getMarket('btc-100k-weekly');
+
+const result = await orderClient.createOrder({
+  marketSlug: market.slug,
+  tokenId: market.positionIds[0], // YES token
+  side: 'BUY',
+  price: 0.65,
+  size: 100,
+  orderType: 'GTC',
+});
+
+console.log('Order created:', result.id);
+```
+
+### Sell NO shares
+
+```typescript
+const result = await orderClient.createOrder({
+  marketSlug: market.slug,
+  tokenId: market.positionIds[1], // NO token
+  side: 'SELL',
+  price: 0.40,
+  size: 50,
+  orderType: 'GTC',
+});
+```
+
+### GTC Parameter Reference
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `marketSlug` | `string` | Market slug identifier |
+| `tokenId` | `string` | YES or NO token ID from `market.positionIds` |
+| `side` | `'BUY' \| 'SELL'` | Order side |
+| `price` | `number` | Price between 0 and 1 (exclusive) |
+| `size` | `number` | Number of shares (whole number) |
+| `orderType` | `'GTC'` | Order type |
+
+## FOK Orders (Fill-Or-Kill)
+
+FOK orders execute immediately against the existing orderbook or are rejected entirely. Instead of `price` and `size`, specify `makerAmount` which represents the total value to trade.
+
+### Buy with FOK
+
+For a BUY FOK order, `makerAmount` is the amount of USDC you are willing to spend:
+
+```typescript
+const result = await orderClient.createOrder({
+  marketSlug: market.slug,
+  tokenId: market.positionIds[0], // YES token
+  side: 'BUY',
+  makerAmount: 50, // Spend up to 50 USDC
+  orderType: 'FOK',
+});
+```
+
+### Sell with FOK
+
+For a SELL FOK order, `makerAmount` is the number of shares you want to sell:
+
+```typescript
+const result = await orderClient.createOrder({
+  marketSlug: market.slug,
+  tokenId: market.positionIds[0], // YES token
+  side: 'SELL',
+  makerAmount: 100, // Sell 100 shares
+  orderType: 'FOK',
+});
+```
+
+### FOK Parameter Reference
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `marketSlug` | `string` | Market slug identifier |
+| `tokenId` | `string` | YES or NO token ID from `market.positionIds` |
+| `side` | `'BUY' \| 'SELL'` | Order side |
+| `makerAmount` | `number` | BUY: USDC to spend. SELL: shares to sell. |
+| `orderType` | `'FOK'` | Order type |
+
+## NegRisk Orders
+
+When trading NegRisk markets, always use the **submarket slug** -- not the group slug. Fetch the group to discover submarkets, then fetch the specific submarket to get its token IDs.
+
+```typescript
+// 1. Fetch the NegRisk group
+const group = await marketFetcher.getMarket('us-election-2024');
+
+// 2. Pick a submarket
+const submarket = group.submarkets[0];
+
+// 3. Fetch submarket details to get token IDs
+const submarketDetail = await marketFetcher.getMarket(submarket.slug);
+
+// 4. Place an order using the submarket slug and token IDs
+const result = await orderClient.createOrder({
+  marketSlug: submarketDetail.slug,
+  tokenId: submarketDetail.positionIds[0], // YES token
+  side: 'BUY',
+  price: 0.55,
+  size: 25,
+  orderType: 'GTC',
+});
+```
+
+<Warning>
+  Passing the group slug to `createOrder()` will fail. The group slug does not resolve to a tradeable market. Always use the submarket slug.
+</Warning>
+
+## Cancel Orders
+
+Cancel an open order by its ID and market slug:
+
+```typescript
+await orderClient.cancelOrder({
+  orderId: 'order_abc123',
+  marketSlug: 'btc-100k-weekly',
+});
+```
+
+## Order States
+
+| State | Description |
+|-------|-------------|
+| `OPEN` | Order is live on the orderbook |
+| `PARTIALLY_FILLED` | Some shares have been matched |
+| `FILLED` | Order fully matched |
+| `CANCELLED` | Order cancelled by user or system |
+| `REJECTED` | Order rejected (insufficient funds, invalid params, etc.) |
+
+## Error Handling
+
+The SDK throws `ApiError` for HTTP-level failures. Inspect `status` and `message` for details.
+
+```typescript
+import { ApiError } from '@limitless-exchange/sdk';
+
+try {
+  await orderClient.createOrder({
+    marketSlug: 'btc-100k-weekly',
+    tokenId: market.positionIds[0],
+    side: 'BUY',
+    price: 0.65,
+    size: 100,
+    orderType: 'GTC',
+  });
+} catch (error) {
+  if (error instanceof ApiError) {
+    switch (error.status) {
+      case 400:
+        console.error('Bad request:', error.message);
+        break;
+      case 401:
+        console.error('Unauthorized: check your API key');
+        break;
+      case 429:
+        console.error('Rate limited: slow down requests');
+        break;
+      default:
+        console.error(`API error ${error.status}:`, error.message);
+    }
+  } else {
+    throw error;
+  }
+}
+```
+
+See the [Error Handling and Retry](/developers/sdk/typescript/error-handling) guide for retry strategies.
+
+## Validation Rules
+
+<Accordion title="Price validation">
+  Prices must be between 0 and 1 (exclusive). A price of `0.65` means you value the outcome at 65%. Prices outside this range will be rejected by the API.
+
+```typescript
+// Valid
+price: 0.01
+price: 0.99
+
+// Invalid (will throw)
+price: 0
+price: 1
+price: 1.5
+price: -0.1
+```
+</Accordion>
+
+<Accordion title="Size validation">
+  Size must be a positive whole number representing the number of shares. Fractional shares are not supported.
+
+```typescript
+// Valid
+size: 1
+size: 100
+size: 10000
+
+// Invalid (will throw)
+size: 0
+size: 10.5
+size: -1
+```
+</Accordion>

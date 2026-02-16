@@ -1,0 +1,195 @@
+---
+title: "Error Handling & Retry"
+description: "Retry logic and error handling with the Python SDK"
+---
+
+## Overview
+
+The SDK provides structured error types, a retry decorator for transient failures, and configurable logging to help you build resilient trading applications.
+
+## APIError
+
+All non-2xx HTTP responses from the API raise an `APIError` exception:
+
+```python
+from limitless.exceptions import APIError
+
+try:
+    result = await order_client.create_order(
+        token_id=market.tokens.yes,
+        price=0.65,
+        size=10.0,
+        side=Side.BUY,
+        order_type=OrderType.GTC,
+        market_slug="btc-above-100k-march-2025",
+    )
+except APIError as e:
+    print(f"Status: {e.status_code}")
+    print(f"Message: {e.message}")
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `status_code` | `int` | HTTP status code (e.g. `400`, `401`, `429`, `500`) |
+| `message` | `str` | Raw JSON response body from the API |
+
+### Common Status Codes
+
+| Code | Meaning | Typical Cause |
+|------|---------|---------------|
+| `400` | Bad Request | Invalid order parameters, malformed payload |
+| `401` | Unauthorized | Missing or invalid API key |
+| `403` | Forbidden | Insufficient permissions or geographic restriction |
+| `404` | Not Found | Invalid market slug or order ID |
+| `429` | Too Many Requests | Rate limit exceeded |
+| `500` | Internal Server Error | Transient server-side failure |
+
+## Retry Decorator
+
+Use the `@retry_on_errors` decorator to automatically retry operations that fail with specific status codes:
+
+```python
+from limitless.retry import retry_on_errors
+
+@retry_on_errors(
+    status_codes={500, 429},
+    max_retries=3,
+    delays=[1, 2, 4],  # seconds between retries (exponential backoff)
+    on_retry=lambda attempt, error: print(f"Retry {attempt}: {error}"),
+)
+async def place_order_with_retry():
+    return await order_client.create_order(
+        token_id=market.tokens.yes,
+        price=0.65,
+        size=10.0,
+        side=Side.BUY,
+        order_type=OrderType.GTC,
+        market_slug="btc-above-100k-march-2025",
+    )
+
+result = await place_order_with_retry()
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `status_codes` | `set[int]` | HTTP status codes that trigger a retry |
+| `max_retries` | `int` | Maximum number of retry attempts |
+| `delays` | `list[float]` | Delay in seconds before each retry (supports exponential backoff) |
+| `on_retry` | `callable \| None` | Optional callback invoked on each retry with `(attempt, error)` |
+
+<Note>
+  The decorator only retries on `APIError` exceptions whose `status_code` is in the `status_codes` set. All other exceptions propagate immediately.
+</Note>
+
+## RetryableClient
+
+For broader retry coverage, wrap your `HttpClient` with the `RetryableClient`. This applies retry logic to **all** API calls made through the client:
+
+```python
+from limitless.http_client import HttpClient
+from limitless.retry import RetryableClient
+
+http_client = HttpClient()
+retryable_client = RetryableClient(
+    client=http_client,
+    status_codes={500, 502, 503, 429},
+    max_retries=3,
+    delays=[1, 2, 4],
+)
+
+# Use retryable_client in place of http_client
+market_fetcher = MarketFetcher(retryable_client)
+order_client = OrderClient(retryable_client, account)
+```
+
+<Tip>
+  Use `RetryableClient` for automated trading bots that need resilience against transient failures without decorating every function individually.
+</Tip>
+
+## Debugging with ConsoleLogger
+
+Enable verbose logging to trace requests, responses, and internal operations:
+
+```python
+from limitless.logger import ConsoleLogger, LogLevel
+
+logger = ConsoleLogger(level=LogLevel.DEBUG)
+```
+
+At `DEBUG` level, the logger outputs:
+
+- Request and response headers
+- Venue cache hits and misses
+- Full API response bodies
+- Retry attempts and delays
+- WebSocket connection state changes
+
+<Accordion title="Example DEBUG output">
+```
+[DEBUG] GET /markets/btc-above-100k-march-2025
+[DEBUG] Headers: {'X-API-Key': 'lmts_***', 'Content-Type': 'application/json'}
+[DEBUG] Response 200 in 142ms
+[DEBUG] Venue cached for btc-above-100k-march-2025: exchange=0xA1b2... adapter=0xD4e5...
+[DEBUG] POST /orders
+[DEBUG] Response 429 in 38ms
+[DEBUG] Retry 1/3 after 1s — status 429
+[DEBUG] POST /orders
+[DEBUG] Response 200 in 156ms
+```
+</Accordion>
+
+## Best Practices
+
+<Steps>
+
+<Step title="Always handle APIError">
+  Wrap every API call in a try/except block. Log the `status_code` and `message` for diagnostics:
+
+  ```python
+  try:
+      result = await order_client.create_order(...)
+  except APIError as e:
+      logger.error(f"Order failed: {e.status_code} — {e.message}")
+  ```
+</Step>
+
+<Step title="Retry only transient errors">
+  Limit retries to status codes like `429` (rate limit) and `5xx` (server errors). Do not retry `400` (bad request) or `401` (auth failure) as these require corrective action:
+
+  ```python
+  @retry_on_errors(status_codes={429, 500, 502, 503})
+  async def resilient_call():
+      ...
+  ```
+</Step>
+
+<Step title="Use exponential backoff">
+  Increase delays between retries to avoid overwhelming the API:
+
+  ```python
+  @retry_on_errors(
+      status_codes={429, 500},
+      max_retries=4,
+      delays=[1, 2, 4, 8],
+  )
+  async def backoff_call():
+      ...
+  ```
+</Step>
+
+<Step title="Close the client on exit">
+  Always close the `HttpClient` to release connections, even if an error occurs:
+
+  ```python
+  try:
+      # ... your trading logic
+  finally:
+      await http_client.close()
+  ```
+</Step>
+
+<Step title="Use DEBUG logging during development">
+  Enable `LogLevel.DEBUG` to see the full request/response cycle. Switch to `INFO` or `WARN` in production to reduce noise.
+</Step>
+
+</Steps>

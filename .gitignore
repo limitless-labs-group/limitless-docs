@@ -1,0 +1,7 @@
+node_modules/
+
+# Reference materials (SDK repos + OpenAPI spec are for reference only)
+limitless-sdk/
+limitless-exchange-ts-sdk/
+openapi.json
+docs-reference/

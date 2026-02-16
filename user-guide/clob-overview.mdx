@@ -1,0 +1,36 @@
+---
+title: "CLOB Overview"
+description: "How the Limitless Central Limit Order Book works"
+---
+
+## Overview
+
+Interacting with Limitless's order book is simple and familiar for both traders and market makers. Market orders provide instant execution at the best available price, while limit orders allow you to set your price, participate in price discovery, and earn rewards.
+
+## The Orderbook
+
+Each market has a **Yes** and **No** order book, with separate **Bids** (buy orders) and **Asks** (sell orders).
+
+{/* TODO: Add orderbook screenshot */}
+<Frame>
+  <img src="/images/placeholder-orderbook.png" alt="Orderbook example" />
+</Frame>
+
+For example, in a market about the BTC price:
+
+- Traders are offering to **sell** "Yes" shares at **51 cents** — this is the price you'd pay if you placed a Market Order to buy.
+- Traders are **bidding** 49 cents to **buy** "Yes" shares — the amount you'd receive if you placed a Market Order to sell.
+
+The difference between them is the **Spread** — the lower the better.
+
+## Order Types
+
+| Type | Description | Best For |
+|------|-------------|----------|
+| [Market Order](/user-guide/market-orders) | Instant execution at best available price | Quick trades |
+| [Limit Order](/user-guide/limit-orders) | Set your own price | Price control, earning LP rewards |
+
+## Advanced Features
+
+- **[Merge / Split shares](/user-guide/merge-split)** — Convert between collateral and share pairs
+- **[Negrisk markets](/user-guide/negrisk-overview)** — Category markets where only one outcome wins

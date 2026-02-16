@@ -1,0 +1,191 @@
+---
+title: "Markets"
+description: "Market discovery and orderbook data with the TypeScript SDK"
+---
+
+## MarketFetcher Setup
+
+`MarketFetcher` provides read-only access to market data. No API key is required for public endpoints.
+
+```typescript
+import { HttpClient, MarketFetcher } from '@limitless-exchange/sdk';
+
+const httpClient = new HttpClient({
+  baseURL: 'https://api.limitless.exchange',
+});
+
+const marketFetcher = new MarketFetcher(httpClient);
+```
+
+## Active Markets
+
+Retrieve a paginated list of currently active markets with optional sorting.
+
+```typescript
+const markets = await marketFetcher.getActiveMarkets({
+  limit: 20,
+  page: 1,
+  sortBy: 'newest',
+});
+
+for (const market of markets) {
+  console.log(`${market.slug} — ${market.title}`);
+}
+```
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | `number` | `10` | Number of markets per page |
+| `page` | `number` | `1` | Page number (1-indexed) |
+| `sortBy` | `string` | `'newest'` | Sort order for results |
+
+### Sort Options
+
+| Value | Description |
+|-------|-------------|
+| `'lp_rewards'` | Markets with the highest LP rewards |
+| `'ending_soon'` | Markets closest to resolution |
+| `'newest'` | Most recently created markets |
+| `'high_value'` | Markets with the highest volume or liquidity |
+
+## Single Market
+
+Fetch a single market by slug. The response includes venue contract addresses and token IDs needed for trading.
+
+```typescript
+const market = await marketFetcher.getMarket('btc-100k-weekly');
+
+console.log('Slug:', market.slug);
+console.log('Venue exchange:', market.venue.exchange);
+console.log('YES token ID:', market.positionIds[0]);
+console.log('NO token ID:', market.positionIds[1]);
+```
+
+<Note>
+  `getMarket()` automatically caches the venue data for the returned market. Subsequent calls for the same slug return the cached result. Always fetch the market before placing orders to ensure the venue is cached.
+</Note>
+
+### Market Response Structure
+
+```typescript
+interface Market {
+  slug: string;
+  title: string;
+  venue: {
+    exchange: string;   // EIP-712 verifyingContract address
+    adapter: string;    // Adapter contract address
+  };
+  positionIds: [string, string]; // [YES token ID, NO token ID]
+  // ... additional fields
+}
+```
+
+## Orderbook
+
+Fetch the current orderbook for a CLOB market. Returns bids, asks, and the current spread.
+
+```typescript
+const orderbook = await marketFetcher.getOrderBook('btc-100k-weekly');
+
+console.log('Best bid:', orderbook.bids[0]?.price);
+console.log('Best ask:', orderbook.asks[0]?.price);
+
+// Calculate spread
+if (orderbook.bids.length > 0 && orderbook.asks.length > 0) {
+  const spread = orderbook.asks[0].price - orderbook.bids[0].price;
+  console.log('Spread:', spread.toFixed(4));
+}
+```
+
+### Orderbook Response Structure
+
+```typescript
+interface Orderbook {
+  bids: OrderbookLevel[];
+  asks: OrderbookLevel[];
+}
+
+interface OrderbookLevel {
+  price: number;   // 0 to 1
+  size: number;    // Number of shares
+}
+```
+
+## User Orders
+
+Retrieve your open orders for a specific market using the fluent API. Requires an API key.
+
+```typescript
+const httpClient = new HttpClient({
+  baseURL: 'https://api.limitless.exchange',
+  apiKey: process.env.LIMITLESS_API_KEY,
+});
+
+const marketFetcher = new MarketFetcher(httpClient);
+const market = await marketFetcher.getMarket('btc-100k-weekly');
+
+const orders = await market.getUserOrders();
+
+for (const order of orders) {
+  console.log(order.id, order.side, order.price, order.status);
+}
+```
+
+<Note>
+  The `getUserOrders()` method is available on the market object returned by `getMarket()`. It requires an authenticated `HttpClient` (with an API key).
+</Note>
+
+## NegRisk Group Markets
+
+NegRisk markets are organized into groups. Each group contains multiple submarkets (outcomes). To trade a specific outcome, fetch the group first, then access the submarket you need.
+
+<Steps>
+
+<Step title="Fetch the NegRisk group">
+```typescript
+const group = await marketFetcher.getMarket('us-election-2024');
+
+console.log('Group:', group.slug);
+console.log('Submarkets:', group.submarkets.length);
+```
+</Step>
+
+<Step title="Access a submarket">
+```typescript
+const submarket = group.submarkets[0];
+console.log('Submarket:', submarket.slug, submarket.title);
+```
+</Step>
+
+<Step title="Fetch the submarket for token IDs">
+  You must call `getMarket()` on the submarket slug to get the venue and token IDs required for placing orders.
+
+```typescript
+const submarketDetail = await marketFetcher.getMarket(submarket.slug);
+
+console.log('YES token:', submarketDetail.positionIds[0]);
+console.log('NO token:', submarketDetail.positionIds[1]);
+```
+</Step>
+
+</Steps>
+
+<Warning>
+  Always use the **submarket slug** (not the group slug) when placing orders on NegRisk markets. The group slug does not have token IDs associated with it.
+</Warning>
+
+## Best Practices
+
+<Accordion title="Cache venue data">
+  Always call `getMarket()` before placing orders. The SDK caches venue data (exchange and adapter addresses) internally. This avoids redundant API calls and ensures the `OrderClient` has the information it needs to sign orders.
+</Accordion>
+
+<Accordion title="Use WebSocket instead of polling">
+  For real-time orderbook data, subscribe to WebSocket events rather than polling `getOrderBook()`. The WebSocket pushes `orderbookUpdate` events whenever the book changes, reducing latency and API usage. See the [WebSocket Streaming](/developers/sdk/typescript/websocket) guide.
+</Accordion>
+
+<Accordion title="Paginate large result sets">
+  When fetching active markets, always use `limit` and `page` parameters. Requesting unbounded result sets can cause timeouts and high memory usage.
+</Accordion>

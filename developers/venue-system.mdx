@@ -1,0 +1,51 @@
+---
+title: "Venue System"
+description: "Understanding the venue system for CLOB market trading"
+---
+
+## Overview
+
+CLOB markets use a **venue system** where each market is associated with specific contract addresses. Before placing orders, you must fetch venue data for the market.
+
+## How It Works
+
+<Steps>
+
+<Step title="Fetch market data">
+  `GET /markets/:slug` returns venue information for the market.
+</Step>
+
+<Step title="Use venue.exchange">
+  This address is the `verifyingContract` for EIP-712 order signing.
+</Step>
+
+<Step title="Cache the venue">
+  Venue data is **static** per market — fetch once and reuse.
+</Step>
+
+</Steps>
+
+## Venue Response
+
+```json
+{
+  "venue": {
+    "exchange": "0xA1b2C3...",
+    "adapter": "0xD4e5F6..."
+  }
+}
+```
+
+## Required Token Approvals
+
+Before trading, set up token approvals based on your order type:
+
+| Order Type | Market Type | Approve To |
+|-----------|-------------|------------|
+| **BUY** | All CLOB | USDC → `venue.exchange` |
+| **SELL** | Simple CLOB | Conditional Tokens → `venue.exchange` |
+| **SELL** | NegRisk / Grouped | Conditional Tokens → `venue.exchange` **AND** `venue.adapter` |
+
+<Warning>
+  For NegRisk SELL orders, you must approve to **both** the exchange and the adapter addresses.
+</Warning>

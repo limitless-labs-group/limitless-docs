@@ -1,0 +1,45 @@
+---
+title: "LP Rewards"
+description: "Earn rewards for providing liquidity with limit orders"
+---
+
+## Overview
+
+The LP Rewards program incentivizes providing liquidity by rewarding well-placed limit orders. These rewards promote tighter spreads, thicker order books, and a healthy marketplace.
+
+The design iterates on an industry-standard approach used by dYdX and Polymarket, with specifically tuned parameters to ensure competitiveness and fairness.
+
+## Methodology
+
+- Rewards are earned by placing limit orders **within a specific spread from the market midpoint**\*
+- The **closer** an order is to the midpoint and the **more competitive** its size, the higher the reward
+- To qualify, orders must exceed the **minimum size threshold** set on a per-market basis
+- Rewards are calculated **every minute** across all markets and paid out daily at **12:00 UTC**
+
+<Note>
+  \*To maintain a fair market-making experience, only limit orders that exceed the minimum shares threshold count toward the midpoint calculation.
+</Note>
+
+## Rewards Parameters
+
+Each market has 3 parameters that define how rewards are paid out:
+
+| Parameter | Example | Description |
+|-----------|---------|-------------|
+| **Rewards** | &#36;200 | Daily USDC rewards available for the market |
+| **Spread** | 3c | Maximum distance from midpoint to earn rewards |
+| **Min Shares** | 100 | Minimum order size to qualify |
+
+These parameters are set to support positive market activity while accounting for each market's uniqueness.
+
+## Bonus Multiplier
+
+Limit orders placed **closer to the midpoint** earn additional rewards through a bonus multiplier. The tighter your spread, the greater your share of rewards.
+
+## One-Sided Liquidity
+
+To promote tail-end speculation, earning from one-sided liquidity is only allowed while the odds are between **5% - 95%**. This provides LPs with greater flexibility while fostering a robust market structure.
+
+## Note on Adjustments
+
+These parameters are dynamic and may be adjusted over time to meet the exchange's needs and maintain a thriving marketplace.

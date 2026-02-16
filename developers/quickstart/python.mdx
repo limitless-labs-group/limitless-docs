@@ -1,0 +1,423 @@
+---
+title: "Python Quick Start"
+description: "End-to-end Python implementation for trading on Limitless Exchange"
+---
+
+## Overview
+
+This guide walks you through a complete Python implementation for trading on Limitless Exchange: authentication, fetching market data, building and signing orders with EIP-712, and submitting them via the REST API.
+
+## Prerequisites
+
+<Steps>
+
+<Step title="Install dependencies">
+  Install the required packages:
+
+  ```bash
+  pip install eth-account requests web3
+  ```
+
+  - **eth-account**: EIP-712 signing and key management
+  - **requests**: HTTP client for the REST API
+  - **web3**: Address checksumming and utilities
+</Step>
+
+<Step title="Obtain credentials">
+  - **API Key**: Generate at [limitless.exchange](https://limitless.exchange) → profile menu → Api keys. Keys start with `lmts_`.
+  - **Private Key**: Your wallet's private key for EIP-712 order signing. Never share or commit it.
+</Step>
+
+</Steps>
+
+<Warning>
+  **Never share your private key.** Store it in environment variables or a secure secrets manager. Do not hardcode it in source code or commit it to version control.
+</Warning>
+
+## Authentication
+
+All API requests require the `X-API-Key` header. Cookie-based session auth is deprecated.
+
+<Note>
+  Your **private key** is used only for **EIP-712 order signing**. The **API key** handles request authentication. Both are required for trading.
+</Note>
+
+```python
+import os
+import requests
+
+API_BASE = "https://api.limitless.exchange"
+API_KEY = os.environ["API_KEY"]  # lmts_...
+
+headers = {
+    "X-API-Key": API_KEY,
+    "Content-Type": "application/json",
+}
+```
+
+<Warning>
+  Cookie-based authentication is **deprecated** and will be removed. Use API keys for all programmatic access.
+</Warning>
+
+## Fetching Market Data
+
+Use `GET /markets/:slug` to retrieve market details, including venue addresses and position IDs. Cache this data per market; it is static.
+
+<CodeGroup>
+
+```python
+def fetch_market(slug: str) -> dict:
+    """Fetch market data including venue and position IDs."""
+    resp = requests.get(f"{API_BASE}/markets/{slug}", headers=headers)
+    resp.raise_for_status()
+    return resp.json()
+```
+
+```python
+# Example response (CLOB market)
+{
+    "slug": "btc-above-100k-march-2025",
+    "venue": {
+        "exchange": "0xA1b2C3d4E5f6...",
+        "adapter": "0xD4e5F6g7H8i9..."
+    },
+    "positionIds": ["19633...", "19633..."]  # [0]=YES, [1]=NO
+}
+```
+
+</CodeGroup>
+
+<Tip>
+  **positionIds[0]** is the YES token, **positionIds[1]** is the NO token. Use the appropriate one based on your order side and outcome.
+</Tip>
+
+## Building Order Payloads
+
+Orders require specific fields. Key values:
+
+| Field | Value | Description |
+|-------|-------|-------------|
+| `side` | `0` | BUY |
+| `side` | `1` | SELL |
+| `signatureType` | `0` | EOA wallet |
+| `orderType` | `GTC` | Good Till Cancelled |
+| `orderType` | `FOK` | Fill or Kill |
+
+USDC uses **6 decimals** (1 USDC = 1,000,000 units). Shares are scaled by 1e6.
+
+<Tabs>
+  <Tab title="BUY order">
+    You pay USDC, receive shares. Use `positionIds[0]` for YES, `positionIds[1]` for NO.
+
+    ```
+    makerAmount = price_in_dollars * num_shares * 1e6   # USDC you pay
+    takerAmount = num_shares * 1e6                       # Shares you receive
+    side = 0
+    ```
+
+    Example: BUY 10 YES shares at $0.65 → `makerAmount` = 6,500,000, `takerAmount` = 10,000,000
+  </Tab>
+  <Tab title="SELL order">
+    You pay shares, receive USDC. Use the token ID of the shares you are selling.
+
+    ```
+    makerAmount = num_shares * 1e6                       # Shares you pay
+    takerAmount = price_in_dollars * num_shares * 1e6   # USDC you receive
+    side = 1
+    ```
+
+    Example: SELL 10 YES shares at $0.65 → `makerAmount` = 10,000,000, `takerAmount` = 6,500,000
+  </Tab>
+</Tabs>
+
+## EIP-712 Signing
+
+Sign orders using EIP-712 with the venue's exchange address as `verifyingContract`.
+
+<Info>
+  See [EIP-712 Order Signing](/developers/eip712-signing) for the full type definition and field reference.
+</Info>
+
+```python
+from eth_account import Account
+from eth_account.messages import encode_typed_data
+from web3 import Web3
+
+CHAIN_ID = 8453  # Base
+ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+
+def sign_order(order_data: dict, verifying_contract: str, private_key: str) -> str:
+    """Sign order with EIP-712 using venue.exchange as verifyingContract."""
+    domain = {
+        "name": "Limitless CTF Exchange",
+        "version": "1",
+        "chainId": CHAIN_ID,
+        "verifyingContract": Web3.to_checksum_address(verifying_contract),
+    }
+    types = {
+        "EIP712Domain": [
+            {"name": "name", "type": "string"},
+            {"name": "version", "type": "string"},
+            {"name": "chainId", "type": "uint256"},
+            {"name": "verifyingContract", "type": "address"},
+        ],
+        "Order": [
+            {"name": "salt", "type": "uint256"},
+            {"name": "maker", "type": "address"},
+            {"name": "signer", "type": "address"},
+            {"name": "taker", "type": "address"},
+            {"name": "tokenId", "type": "uint256"},
+            {"name": "makerAmount", "type": "uint256"},
+            {"name": "takerAmount", "type": "uint256"},
+            {"name": "expiration", "type": "uint256"},
+            {"name": "nonce", "type": "uint256"},
+            {"name": "feeRateBps", "type": "uint256"},
+            {"name": "side", "type": "uint8"},
+            {"name": "signatureType", "type": "uint8"},
+        ],
+    }
+    message = {
+        "salt": order_data["salt"],
+        "maker": Web3.to_checksum_address(order_data["maker"]),
+        "signer": Web3.to_checksum_address(order_data["signer"]),
+        "taker": Web3.to_checksum_address(order_data["taker"]),
+        "tokenId": int(order_data["tokenId"]),
+        "makerAmount": order_data["makerAmount"],
+        "takerAmount": order_data["takerAmount"],
+        "expiration": order_data["expiration"],
+        "nonce": order_data["nonce"],
+        "feeRateBps": order_data["feeRateBps"],
+        "side": order_data["side"],
+        "signatureType": order_data["signatureType"],
+    }
+    typed_data = {
+        "types": types,
+        "primaryType": "Order",
+        "domain": domain,
+        "message": message,
+    }
+    encoded = encode_typed_data(typed_data)
+    signed = Account.sign_message(encoded, private_key=private_key)
+    return signed.signature.hex()
+```
+
+<Note>
+  All addresses must be **checksummed** (EIP-55). Use `Web3.to_checksum_address()`.
+</Note>
+
+## Submitting Orders
+
+Send the signed order to `POST /orders`:
+
+```python
+def submit_order(order_payload: dict) -> dict:
+    """Submit a signed order to the API."""
+    resp = requests.post(
+        f"{API_BASE}/orders",
+        headers=headers,
+        json=order_payload,
+    )
+    resp.raise_for_status()
+    return resp.json()
+```
+
+## Complete Working Example
+
+<CodeGroup>
+
+```python
+"""
+Limitless Exchange - Python Quick Start
+Place a BUY order for YES shares on a CLOB market.
+"""
+import os
+import time
+import requests
+from eth_account import Account
+from eth_account.messages import encode_typed_data
+from web3 import Web3
+
+API_BASE = "https://api.limitless.exchange"
+CHAIN_ID = 8453
+ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+
+# Load from environment
+API_KEY = os.environ["API_KEY"]
+PRIVATE_KEY = os.environ["PRIVATE_KEY"]
+OWNER_ID = int(os.environ.get("OWNER_ID", "0"))  # Profile ID from API
+
+headers = {
+    "X-API-Key": API_KEY,
+    "Content-Type": "application/json",
+}
+
+
+def fetch_market(slug: str) -> dict:
+    resp = requests.get(f"{API_BASE}/markets/{slug}", headers=headers)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def sign_order(order_data: dict, verifying_contract: str, pk: str) -> str:
+    domain = {
+        "name": "Limitless CTF Exchange",
+        "version": "1",
+        "chainId": CHAIN_ID,
+        "verifyingContract": Web3.to_checksum_address(verifying_contract),
+    }
+    types = {
+        "EIP712Domain": [
+            {"name": "name", "type": "string"},
+            {"name": "version", "type": "string"},
+            {"name": "chainId", "type": "uint256"},
+            {"name": "verifyingContract", "type": "address"},
+        ],
+        "Order": [
+            {"name": "salt", "type": "uint256"},
+            {"name": "maker", "type": "address"},
+            {"name": "signer", "type": "address"},
+            {"name": "taker", "type": "address"},
+            {"name": "tokenId", "type": "uint256"},
+            {"name": "makerAmount", "type": "uint256"},
+            {"name": "takerAmount", "type": "uint256"},
+            {"name": "expiration", "type": "uint256"},
+            {"name": "nonce", "type": "uint256"},
+            {"name": "feeRateBps", "type": "uint256"},
+            {"name": "side", "type": "uint8"},
+            {"name": "signatureType", "type": "uint8"},
+        ],
+    }
+    msg = {
+        "salt": order_data["salt"],
+        "maker": Web3.to_checksum_address(order_data["maker"]),
+        "signer": Web3.to_checksum_address(order_data["signer"]),
+        "taker": Web3.to_checksum_address(order_data["taker"]),
+        "tokenId": int(order_data["tokenId"]),
+        "makerAmount": order_data["makerAmount"],
+        "takerAmount": order_data["takerAmount"],
+        "expiration": order_data["expiration"],
+        "nonce": order_data["nonce"],
+        "feeRateBps": order_data["feeRateBps"],
+        "side": order_data["side"],
+        "signatureType": order_data["signatureType"],
+    }
+    encoded = encode_typed_data({
+        "types": types,
+        "primaryType": "Order",
+        "domain": domain,
+        "message": msg,
+    })
+    signed = Account.sign_message(encoded, private_key=pk)
+    return signed.signature.hex()
+
+
+def place_buy_order(
+    market_slug: str,
+    num_shares: float,
+    price_per_share: float,
+    order_type: str = "GTC",
+) -> dict:
+    market = fetch_market(market_slug)
+    venue = market["venue"]
+    position_ids = market["positionIds"]
+    account = Account.from_key(PRIVATE_KEY)
+    maker = account.address
+
+    # YES token is positionIds[0]
+    token_id = position_ids[0]
+    maker_amount = int(price_per_share * num_shares * 1e6)
+    taker_amount = int(num_shares * 1e6)
+
+    salt = int(time.time() * 1000)
+    order_data = {
+        "salt": salt,
+        "maker": Web3.to_checksum_address(maker),
+        "signer": Web3.to_checksum_address(maker),
+        "taker": ZERO_ADDRESS,
+        "tokenId": token_id,
+        "makerAmount": maker_amount,
+        "takerAmount": taker_amount,
+        "expiration": 0,
+        "nonce": 0,
+        "feeRateBps": 0,
+        "side": 0,  # BUY
+        "signatureType": 0,  # EOA
+    }
+    signature = sign_order(order_data, venue["exchange"], PRIVATE_KEY)
+
+    order_payload = {
+        "order": {**order_data, "signature": signature},
+        "ownerId": OWNER_ID,
+        "orderType": order_type,
+        "marketSlug": market_slug,
+    }
+    resp = requests.post(f"{API_BASE}/orders", headers=headers, json=order_payload)
+    resp.raise_for_status()
+    return resp.json()
+
+
+if __name__ == "__main__":
+    result = place_buy_order(
+        market_slug="your-market-slug",
+        num_shares=10.0,
+        price_per_share=0.65,
+        order_type="GTC",
+    )
+    print(result)
+```
+
+```bash
+# Run with environment variables
+export API_KEY="lmts_your_key_here"
+export PRIVATE_KEY="0x..."
+export OWNER_ID="12345"  # Your profile ID
+python quickstart.py
+```
+
+</CodeGroup>
+
+<Tip>
+  **ownerId** is your profile ID. Obtain it from your first authenticated response (e.g. portfolio or auth endpoints) or from the Limitless UI. Set `OWNER_ID` in your environment.
+</Tip>
+
+## Troubleshooting
+
+<Steps>
+
+<Step title="401 Unauthorized">
+  Ensure `X-API-Key` is set correctly and the key starts with `lmts_`. Check that the key is active in the Limitless UI.
+</Step>
+
+<Step title="400 Invalid order / signature mismatch">
+  - Verify `verifyingContract` is the market's `venue.exchange` address.
+  - Ensure all addresses are checksummed (EIP-55).
+  - Confirm `makerAmount` and `takerAmount` use 1e6 scaling for USDC and shares.
+</Step>
+
+<Step title="Insufficient balance or allowance">
+  - Ensure you have enough USDC on Base for BUY orders.
+  - Approve USDC to `venue.exchange` for BUY; Conditional Tokens to `venue.exchange` (and `venue.adapter` for NegRisk SELL) for SELL.
+</Step>
+
+<Step title="Wrong tokenId">
+  Use `positionIds[0]` for YES and `positionIds[1]` for NO. Double-check you are trading the correct outcome.
+</Step>
+
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="EIP-712 Signing" icon="pen" href="/developers/eip712-signing">
+    Full order type definition and field reference.
+  </Card>
+  <Card title="Venue System" icon="building" href="/developers/venue-system">
+    Understanding venue contracts and token approvals.
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Complete endpoint documentation.
+  </Card>
+  <Card title="Authentication" icon="key" href="/developers/authentication">
+    API key setup and best practices.
+  </Card>
+</CardGroup>

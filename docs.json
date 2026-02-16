@@ -1,0 +1,224 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Limitless Exchange",
+  "colors": {
+    "primary": "#9AB83A",
+    "light": "#DCF58C",
+    "dark": "#7A9A1E"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "User Guide",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "index",
+              "user-guide/what-is-limitless",
+              "user-guide/making-your-first-trade"
+            ]
+          },
+          {
+            "group": "CLOB",
+            "pages": [
+              "user-guide/clob-overview",
+              "user-guide/market-orders",
+              "user-guide/limit-orders",
+              "user-guide/managing-orders",
+              "user-guide/merge-split"
+            ]
+          },
+          {
+            "group": "Negrisk Markets",
+            "pages": [
+              "user-guide/negrisk-overview",
+              "user-guide/converting-shares"
+            ]
+          },
+          {
+            "group": "Rewards & Fees",
+            "pages": [
+              "user-guide/lp-rewards",
+              "user-guide/fees"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "user-guide/market-resolution",
+              "user-guide/smart-contracts",
+              "user-guide/analytics",
+              "user-guide/refund-policy"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "For Developers",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "developers/introduction",
+              "developers/authentication"
+            ]
+          },
+          {
+            "group": "Quick Start",
+            "pages": [
+              "developers/quickstart/python",
+              "developers/quickstart/java",
+              "developers/quickstart/nodejs",
+              "developers/quickstart/websocket"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "developers/venue-system",
+              "developers/eip712-signing",
+              "developers/websocket-events"
+            ]
+          },
+          {
+            "group": "TypeScript SDK",
+            "pages": [
+              "developers/sdk/typescript/getting-started",
+              "developers/sdk/typescript/markets",
+              "developers/sdk/typescript/orders",
+              "developers/sdk/typescript/portfolio",
+              "developers/sdk/typescript/websocket",
+              "developers/sdk/typescript/error-handling"
+            ]
+          },
+          {
+            "group": "Python SDK",
+            "pages": [
+              "developers/sdk/python/getting-started",
+              "developers/sdk/python/markets",
+              "developers/sdk/python/orders",
+              "developers/sdk/python/portfolio",
+              "developers/sdk/python/websocket",
+              "developers/sdk/python/error-handling"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "",
+            "pages": [
+              "api-reference/introduction"
+            ]
+          },
+          {
+            "group": "Authentication",
+            "pages": [
+              "api-reference/auth/get-signing-message",
+              "api-reference/auth/verify-auth",
+              "api-reference/auth/login",
+              "api-reference/auth/logout"
+            ]
+          },
+          {
+            "group": "Markets",
+            "pages": [
+              "api-reference/markets/browse-active",
+              "api-reference/markets/category-count",
+              "api-reference/markets/active-slugs",
+              "api-reference/markets/get-market",
+              "api-reference/markets/feed-events",
+              "api-reference/markets/search"
+            ]
+          },
+          {
+            "group": "Trading",
+            "pages": [
+              "api-reference/trading/create-order",
+              "api-reference/trading/cancel-order",
+              "api-reference/trading/cancel-batch",
+              "api-reference/trading/cancel-all",
+              "api-reference/trading/orderbook",
+              "api-reference/trading/historical-price",
+              "api-reference/trading/locked-balance",
+              "api-reference/trading/user-orders",
+              "api-reference/trading/market-events"
+            ]
+          },
+          {
+            "group": "Portfolio",
+            "pages": [
+              "api-reference/portfolio/trades",
+              "api-reference/portfolio/positions",
+              "api-reference/portfolio/pnl-chart",
+              "api-reference/portfolio/history",
+              "api-reference/portfolio/points",
+              "api-reference/portfolio/allowance"
+            ]
+          },
+          {
+            "group": "Public Portfolio",
+            "pages": [
+              "api-reference/public-portfolio/traded-volume",
+              "api-reference/public-portfolio/positions",
+              "api-reference/public-portfolio/pnl-chart"
+            ]
+          }
+        ]
+      }
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "Limitless Exchange",
+          "href": "https://limitless.exchange",
+          "icon": "arrow-up-right-from-square"
+        },
+        {
+          "anchor": "Discord",
+          "href": "https://discord.com/invite/yb4SscD8RZ",
+          "icon": "discord"
+        }
+      ]
+    }
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Support",
+        "href": "mailto:hey@limitless.network"
+      }
+    ]
+  },
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "cursor"
+    ]
+  },
+  "footer": {
+    "socials": {
+      "x": "https://x.com/trylimitless",
+      "discord": "https://discord.com/invite/yb4SscD8RZ"
+    }
+  },
+  "api": {
+    "baseUrl": "https://api.limitless.exchange",
+    "playground": {
+      "mode": "simple"
+    }
+  },
+  "openapi": "/openapi.json"
+}

@@ -1,0 +1,137 @@
+---
+title: "WebSocket Streaming"
+description: "Real-time orderbook updates with the Python SDK"
+---
+
+## Overview
+
+The `WebSocketClient` provides real-time streaming of orderbook updates and price data over a persistent WebSocket connection. It supports automatic reconnection and event-driven message handling via decorators.
+
+## Setup
+
+```python
+from limitless.ws_client import WebSocketClient, WebSocketConfig
+
+config = WebSocketConfig(
+    url="wss://ws.limitless.exchange",
+    auto_reconnect=True,
+    reconnect_delay=5,  # seconds between reconnection attempts
+)
+
+ws_client = WebSocketClient(config)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `url` | `str` | Required | WebSocket server URL |
+| `auto_reconnect` | `bool` | `True` | Automatically reconnect on disconnection |
+| `reconnect_delay` | `int` | `5` | Seconds to wait between reconnection attempts |
+
+## Event Handlers
+
+Register handlers for specific events using the `@ws_client.on()` decorator:
+
+```python
+@ws_client.on("connect")
+async def on_connect():
+    print("Connected to WebSocket")
+
+@ws_client.on("orderbookUpdate")
+async def on_orderbook(data):
+    print("Orderbook update:", data)
+
+@ws_client.on("newPriceData")
+async def on_price(data):
+    print("Price update:", data)
+```
+
+### Available Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `connect` | None | Fired when the WebSocket connection is established |
+| `orderbookUpdate` | `dict` | Orderbook changes (new bids/asks, removals) |
+| `newPriceData` | `dict` | Latest price data for subscribed markets |
+
+## Subscribing to Markets
+
+After connecting, subscribe to specific markets to receive updates:
+
+```python
+@ws_client.on("connect")
+async def on_connect():
+    await ws_client.subscribe(
+        "subscribe_market_prices",
+        {"marketSlugs": ["btc-above-100k-march-2025"]},
+    )
+    print("Subscribed to market prices")
+```
+
+The `subscribe()` method takes two arguments:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `event` | `str` | Subscription event name (e.g. `"subscribe_market_prices"`) |
+| `data` | `dict` | Subscription parameters including `marketSlugs` |
+
+<Tip>
+  You can subscribe to multiple markets at once by passing a list of slugs in `marketSlugs`.
+</Tip>
+
+## Auto-Reconnect
+
+When `auto_reconnect` is enabled (the default), the client automatically reconnects after a disconnection:
+
+1. The connection drops (network issue, server restart, etc.)
+2. The client waits `reconnect_delay` seconds
+3. A new connection is established
+4. The `connect` event fires again, so your subscription logic re-executes
+
+<Note>
+  Place your `subscribe()` calls inside the `connect` handler to ensure subscriptions are restored after every reconnection.
+</Note>
+
+## Complete Example
+
+```python
+import asyncio
+from limitless.ws_client import WebSocketClient, WebSocketConfig
+
+async def main():
+    config = WebSocketConfig(
+        url="wss://ws.limitless.exchange",
+        auto_reconnect=True,
+        reconnect_delay=5,
+    )
+    ws_client = WebSocketClient(config)
+
+    @ws_client.on("connect")
+    async def on_connect():
+        print("Connected")
+        await ws_client.subscribe(
+            "subscribe_market_prices",
+            {"marketSlugs": ["btc-above-100k-march-2025"]},
+        )
+
+    @ws_client.on("orderbookUpdate")
+    async def on_orderbook(data):
+        slug = data.get("marketSlug", "unknown")
+        bids = len(data.get("bids", []))
+        asks = len(data.get("asks", []))
+        print(f"[{slug}] Orderbook: {bids} bids, {asks} asks")
+
+    @ws_client.on("newPriceData")
+    async def on_price(data):
+        slug = data.get("marketSlug", "unknown")
+        price = data.get("price", "N/A")
+        print(f"[{slug}] Price: {price}")
+
+    # Start the WebSocket client (runs until interrupted)
+    await ws_client.connect()
+
+asyncio.run(main())
+```
+
+<Warning>
+  The `await ws_client.connect()` call blocks the event loop until the connection is closed or the program is interrupted. Run it as the last statement in your async function, or use `asyncio.create_task()` if you need to run other coroutines concurrently.
+</Warning>

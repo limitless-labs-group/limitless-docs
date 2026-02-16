@@ -1,0 +1,170 @@
+---
+title: "Portfolio & Positions"
+description: "Track positions and history with the TypeScript SDK"
+---
+
+## PortfolioFetcher Setup
+
+`PortfolioFetcher` provides access to your positions, trade history, and accumulated points. An API key is required.
+
+```typescript
+import { HttpClient, PortfolioFetcher } from '@limitless-exchange/sdk';
+
+const httpClient = new HttpClient({
+  baseURL: 'https://api.limitless.exchange',
+  apiKey: process.env.LIMITLESS_API_KEY,
+});
+
+const portfolio = new PortfolioFetcher(httpClient);
+```
+
+## All Positions
+
+Fetch all positions across CLOB and AMM markets in a single call:
+
+```typescript
+const positions = await portfolio.getPositions();
+
+console.log('CLOB positions:', positions.clob.length);
+console.log('AMM positions:', positions.amm.length);
+console.log('Accumulative points:', positions.accumulativePoints);
+```
+
+### Response Structure
+
+```typescript
+interface PositionsResponse {
+  clob: ClobPosition[];
+  amm: AmmPosition[];
+  accumulativePoints: number;
+}
+```
+
+## CLOB Positions
+
+Retrieve only your CLOB market positions:
+
+```typescript
+const clobPositions = await portfolio.getCLOBPositions();
+
+for (const position of clobPositions) {
+  console.log(`Market: ${position.market.slug}`);
+  console.log(`  YES — size: ${position.positions.yes.size}, PnL: ${position.positions.yes.unrealizedPnl}`);
+  console.log(`  NO  — size: ${position.positions.no.size}, PnL: ${position.positions.no.unrealizedPnl}`);
+}
+```
+
+### CLOB Position Structure
+
+```typescript
+interface ClobPosition {
+  market: {
+    slug: string;
+    title: string;
+  };
+  positions: {
+    yes: {
+      size: number;
+      collateral: number;
+      unrealizedPnl: number;
+    };
+    no: {
+      size: number;
+      collateral: number;
+      unrealizedPnl: number;
+    };
+  };
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `size` | Number of shares held |
+| `collateral` | USDC value of collateral locked |
+| `unrealizedPnl` | Unrealized profit/loss in USDC based on current orderbook prices |
+
+## AMM Positions
+
+Retrieve only your AMM market positions:
+
+```typescript
+const ammPositions = await portfolio.getAMMPositions();
+
+for (const position of ammPositions) {
+  console.log(`Market: ${position.market.slug}`);
+  console.log(`  YES — size: ${position.positions.yes.size}`);
+  console.log(`  NO  — size: ${position.positions.no.size}`);
+}
+```
+
+## Trade History
+
+Fetch paginated trade history:
+
+```typescript
+const history = await portfolio.getUserHistory(1, 25);
+
+for (const entry of history) {
+  console.log(entry.type, entry.market.slug, entry.amount, entry.timestamp);
+}
+```
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `page` | `number` | `1` | Page number (1-indexed) |
+| `limit` | `number` | `10` | Number of entries per page |
+
+## Combining Positions with Market Data
+
+For a richer view, combine position data with live market information:
+
+```typescript
+import { MarketFetcher } from '@limitless-exchange/sdk';
+
+const marketFetcher = new MarketFetcher(httpClient);
+const positions = await portfolio.getCLOBPositions();
+
+for (const position of positions) {
+  const market = await marketFetcher.getMarket(position.market.slug);
+  const orderbook = await marketFetcher.getOrderBook(position.market.slug);
+
+  const bestBid = orderbook.bids[0]?.price ?? 0;
+  const bestAsk = orderbook.asks[0]?.price ?? 1;
+  const midPrice = (bestBid + bestAsk) / 2;
+
+  console.log(`${market.title}`);
+  console.log(`  Mid price: ${midPrice.toFixed(4)}`);
+  console.log(`  YES: ${position.positions.yes.size} shares, PnL: ${position.positions.yes.unrealizedPnl}`);
+  console.log(`  NO:  ${position.positions.no.size} shares, PnL: ${position.positions.no.unrealizedPnl}`);
+}
+```
+
+<Tip>
+  For real-time PnL tracking, combine `PortfolioFetcher` with WebSocket orderbook updates rather than repeatedly polling `getOrderBook()`. See the [WebSocket Streaming](/developers/sdk/typescript/websocket) guide.
+</Tip>
+
+## Error Handling
+
+Portfolio endpoints require a valid API key. If the key is missing or invalid, the SDK throws an `ApiError` with status `401`.
+
+```typescript
+import { ApiError } from '@limitless-exchange/sdk';
+
+try {
+  const positions = await portfolio.getPositions();
+} catch (error) {
+  if (error instanceof ApiError) {
+    if (error.status === 401) {
+      console.error('Authentication failed. Check your LIMITLESS_API_KEY.');
+    } else {
+      console.error(`API error ${error.status}: ${error.message}`);
+    }
+  } else {
+    throw error;
+  }
+}
+```
+
+See the [Error Handling and Retry](/developers/sdk/typescript/error-handling) guide for retry strategies and common error codes.

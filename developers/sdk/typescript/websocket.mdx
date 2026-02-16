@@ -1,0 +1,285 @@
+---
+title: "WebSocket Streaming"
+description: "Real-time market data and position updates with the TypeScript SDK"
+---
+
+## WebSocketClient Setup
+
+The `WebSocketClient` connects to the Limitless Exchange WebSocket server for real-time market data, position updates, and transaction notifications.
+
+```typescript
+import { WebSocketClient } from '@limitless-exchange/sdk';
+
+const ws = new WebSocketClient({
+  url: 'wss://ws.limitless.exchange',
+  autoReconnect: true,
+});
+
+ws.connect();
+```
+
+### Constructor Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `url` | `string` | -- | WebSocket server URL |
+| `autoReconnect` | `boolean` | `true` | Automatically reconnect on disconnection |
+| `apiKey` | `string` | -- | Required for authenticated subscriptions (positions, transactions) |
+
+<Note>
+  Public subscriptions (market prices) do not require an API key. Authenticated subscriptions (positions, transactions) require the `apiKey` option to be set.
+</Note>
+
+## Public Subscriptions
+
+### Market Prices
+
+Subscribe to real-time price updates for one or more markets. No authentication required.
+
+```typescript
+const ws = new WebSocketClient({
+  url: 'wss://ws.limitless.exchange',
+});
+
+ws.connect();
+
+ws.subscribe('subscribe_market_prices', {
+  marketSlugs: ['btc-100k-weekly', 'eth-5k-daily'],
+  marketAddresses: ['0x1234...'], // For AMM markets
+});
+```
+
+<Warning>
+  Subscriptions **replace** previous ones. To listen to both CLOB (by slug) and AMM (by address) markets, include both `marketSlugs` and `marketAddresses` in a single `subscribe_market_prices` call.
+</Warning>
+
+## Authenticated Subscriptions
+
+These subscriptions require an API key passed to the constructor.
+
+```typescript
+const ws = new WebSocketClient({
+  url: 'wss://ws.limitless.exchange',
+  apiKey: process.env.LIMITLESS_API_KEY,
+});
+
+ws.connect();
+```
+
+### Positions
+
+Subscribe to real-time updates when your positions change:
+
+```typescript
+ws.subscribe('subscribe_positions');
+
+ws.on('positions', (data) => {
+  console.log('Position update:', data);
+});
+```
+
+### Transactions
+
+Subscribe to transaction confirmations:
+
+```typescript
+ws.subscribe('subscribe_transactions');
+
+ws.on('tx', (data) => {
+  console.log('Transaction:', data.hash, data.status);
+});
+```
+
+## Events
+
+### orderbookUpdate (CLOB markets)
+
+Fired when a CLOB market orderbook changes. Contains the full updated orderbook.
+
+```typescript
+ws.on('orderbookUpdate', (data: OrderbookUpdate) => {
+  console.log('Market:', data.marketSlug);
+  console.log('Bids:', data.orderbook.bids.length);
+  console.log('Asks:', data.orderbook.asks.length);
+
+  if (data.orderbook.bids.length > 0 && data.orderbook.asks.length > 0) {
+    const spread = data.orderbook.asks[0].price - data.orderbook.bids[0].price;
+    console.log('Spread:', spread.toFixed(4));
+  }
+});
+```
+
+### newPriceData (AMM markets)
+
+Fired when AMM market prices update.
+
+```typescript
+ws.on('newPriceData', (data: NewPriceData) => {
+  console.log('Market:', data.marketAddress);
+  console.log('YES:', data.updatedPrices.yes);
+  console.log('NO:', data.updatedPrices.no);
+});
+```
+
+### positions
+
+Fired when any of your positions change (fill, cancel, resolution).
+
+```typescript
+ws.on('positions', (data: PositionEvent) => {
+  console.log('Updated positions:', data);
+});
+```
+
+### tx
+
+Fired on transaction events related to your account.
+
+```typescript
+ws.on('tx', (data: TransactionEvent) => {
+  console.log('Tx hash:', data.hash);
+  console.log('Status:', data.status);
+});
+```
+
+## Type Definitions
+
+```typescript
+interface OrderbookUpdate {
+  marketSlug: string;
+  orderbook: {
+    bids: { price: number; size: number }[];
+    asks: { price: number; size: number }[];
+  };
+}
+
+interface NewPriceData {
+  marketAddress: string;
+  updatedPrices: {
+    yes: string;
+    no: string;
+  };
+}
+
+interface PositionEvent {
+  clob: Array<{
+    market: { slug: string };
+    positions: {
+      yes: { size: number; collateral: number };
+      no: { size: number; collateral: number };
+    };
+  }>;
+}
+
+interface TransactionEvent {
+  hash: string;
+  status: 'pending' | 'confirmed' | 'failed';
+  type: string;
+}
+```
+
+## Connection Management
+
+### Disconnect handling
+
+Listen for disconnections and clean up resources:
+
+```typescript
+ws.on('disconnect', (reason: string) => {
+  console.log('Disconnected:', reason);
+});
+
+ws.on('reconnect', () => {
+  console.log('Reconnected — resubscribing...');
+
+  ws.subscribe('subscribe_market_prices', {
+    marketSlugs: ['btc-100k-weekly'],
+  });
+});
+```
+
+<Note>
+  When `autoReconnect` is enabled, the client automatically attempts to reconnect. However, you must re-send your subscriptions after reconnection. Listen for the `reconnect` event to resubscribe.
+</Note>
+
+### Graceful shutdown
+
+Clean up the WebSocket connection on process exit:
+
+```typescript
+process.on('SIGINT', () => {
+  console.log('Shutting down...');
+  ws.disconnect();
+  process.exit(0);
+});
+```
+
+## Debugging
+
+Log all raw events to inspect the data the server sends:
+
+```typescript
+ws.onAny((eventName: string, ...args: unknown[]) => {
+  console.log(`[WS] ${eventName}:`, JSON.stringify(args, null, 2));
+});
+```
+
+<Tip>
+  Use raw event logging during development to discover event shapes and debug subscription issues. Remove it before deploying to production.
+</Tip>
+
+## Full Example
+
+A complete script that subscribes to market prices and positions:
+
+```typescript
+import { WebSocketClient } from '@limitless-exchange/sdk';
+
+const ws = new WebSocketClient({
+  url: 'wss://ws.limitless.exchange',
+  apiKey: process.env.LIMITLESS_API_KEY,
+  autoReconnect: true,
+});
+
+ws.connect();
+
+ws.subscribe('subscribe_market_prices', {
+  marketSlugs: ['btc-100k-weekly'],
+});
+
+ws.subscribe('subscribe_positions');
+ws.subscribe('subscribe_transactions');
+
+ws.on('orderbookUpdate', (data) => {
+  const best_bid = data.orderbook.bids[0];
+  const best_ask = data.orderbook.asks[0];
+  console.log(`[${data.marketSlug}] Bid: ${best_bid?.price ?? '-'} | Ask: ${best_ask?.price ?? '-'}`);
+});
+
+ws.on('positions', (data) => {
+  console.log('[Positions]', JSON.stringify(data));
+});
+
+ws.on('tx', (data) => {
+  console.log(`[Tx] ${data.hash} — ${data.status}`);
+});
+
+ws.on('disconnect', (reason) => {
+  console.log('[Disconnected]', reason);
+});
+
+ws.on('reconnect', () => {
+  ws.subscribe('subscribe_market_prices', {
+    marketSlugs: ['btc-100k-weekly'],
+  });
+  ws.subscribe('subscribe_positions');
+  ws.subscribe('subscribe_transactions');
+});
+
+process.on('SIGINT', () => {
+  ws.disconnect();
+  process.exit(0);
+});
+
+console.log('Listening for events... (Ctrl+C to stop)');
+```

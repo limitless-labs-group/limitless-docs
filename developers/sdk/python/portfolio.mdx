@@ -1,0 +1,113 @@
+---
+title: "Portfolio & Positions"
+description: "Track positions and history with the Python SDK"
+---
+
+## Overview
+
+The `PortfolioFetcher` class retrieves your open positions and portfolio data from the Limitless Exchange API. It requires an authenticated `HttpClient` with a valid API key.
+
+## Setup
+
+```python
+from limitless.http_client import HttpClient
+from limitless.portfolio_fetcher import PortfolioFetcher
+
+http_client = HttpClient()  # loads LIMITLESS_API_KEY from env
+portfolio = PortfolioFetcher(http_client)
+```
+
+<Note>
+  `PortfolioFetcher` requires an authenticated client. Ensure your API key is set via the `LIMITLESS_API_KEY` environment variable or the `api_key` parameter on `HttpClient`.
+</Note>
+
+## Fetching Positions
+
+Use `get_positions()` to retrieve all your open positions:
+
+```python
+positions = await portfolio.get_positions()
+```
+
+The response is a dictionary with the following top-level keys:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `clob` | `list[dict]` | Positions on CLOB (order book) markets |
+| `amm` | `list[dict]` | Positions on AMM (automated market maker) markets |
+| `accumulativePoints` | `dict` | Accumulated points and rewards data |
+
+## Iterating CLOB Positions
+
+Each entry in the `clob` list contains the market details and your position size:
+
+```python
+positions = await portfolio.get_positions()
+
+for pos in positions.get("clob", []):
+    market_title = pos["market"]["title"]
+    size = pos["size"]
+    outcome = pos.get("outcomeIndex", "N/A")
+    print(f"{market_title} — size: {size}, outcome index: {outcome}")
+```
+
+<Accordion title="Example response structure">
+```python
+{
+    "clob": [
+        {
+            "market": {
+                "title": "BTC above 100k by March 2025?",
+                "slug": "btc-above-100k-march-2025",
+            },
+            "size": "15.5",
+            "outcomeIndex": 0,
+            # ... additional fields
+        },
+        # ... more positions
+    ],
+    "amm": [
+        # ... AMM positions
+    ],
+    "accumulativePoints": {
+        # ... points data
+    },
+}
+```
+</Accordion>
+
+<Note>
+  The `PortfolioFetcher` returns **raw API responses** without heavy parsing or transformation. Field names and types match the REST API directly. Refer to the [API Reference](/api-reference/portfolio/positions) for the complete response schema.
+</Note>
+
+## Complete Example
+
+```python
+import asyncio
+from limitless.http_client import HttpClient
+from limitless.portfolio_fetcher import PortfolioFetcher
+
+async def main():
+    http_client = HttpClient()
+    portfolio = PortfolioFetcher(http_client)
+
+    positions = await portfolio.get_positions()
+
+    clob_positions = positions.get("clob", [])
+    amm_positions = positions.get("amm", [])
+
+    print(f"CLOB positions: {len(clob_positions)}")
+    for pos in clob_positions:
+        print(f"  {pos['market']['title']} — size: {pos['size']}")
+
+    print(f"\nAMM positions: {len(amm_positions)}")
+    for pos in amm_positions:
+        print(f"  {pos['market']['title']} — size: {pos['size']}")
+
+    points = positions.get("accumulativePoints", {})
+    print(f"\nAccumulative points: {points}")
+
+    await http_client.close()
+
+asyncio.run(main())
+```

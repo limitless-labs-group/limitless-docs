@@ -1,0 +1,103 @@
+---
+title: "WebSocket Events"
+description: "Real-time event reference for the Limitless WebSocket API"
+---
+
+## Connection
+
+**URL:** `wss://ws.limitless.exchange`
+**Namespace:** `/markets`
+**Transport:** WebSocket only (no polling fallback)
+
+```typescript
+import { io } from 'socket.io-client';
+
+const socket = io('wss://ws.limitless.exchange/markets', {
+  transports: ['websocket'],
+  extraHeaders: { 'X-API-Key': 'lmts_your_key_here' }
+});
+```
+
+## Subscribing
+
+Subscribe to markets by emitting `subscribe_market_prices`:
+
+```typescript
+// AMM price updates
+socket.emit('subscribe_market_prices', {
+  marketAddresses: ['0x1234...']
+});
+
+// CLOB orderbook updates
+socket.emit('subscribe_market_prices', {
+  marketSlugs: ['btc-100k-weekly']
+});
+
+// Both at once (recommended to avoid overwriting subscriptions)
+socket.emit('subscribe_market_prices', {
+  marketAddresses: ['0x1234...'],
+  marketSlugs: ['btc-100k-weekly']
+});
+```
+
+<Warning>
+  Subscriptions **replace** previous ones. If you want both AMM prices and CLOB orderbook, send both `marketAddresses` and `marketSlugs` together in a single call.
+</Warning>
+
+## Event Reference
+
+| Event | Direction | Auth Required | Description |
+|-------|-----------|---------------|-------------|
+| `connect` | Server → Client | No | Connection established |
+| `disconnect` | Server → Client | No | Connection lost |
+| `subscribe_market_prices` | Client → Server | No | Subscribe to price/orderbook updates |
+| `subscribe_positions` | Client → Server | Yes | Subscribe to position updates |
+| `newPriceData` | Server → Client | No | AMM market price update |
+| `orderbookUpdate` | Server → Client | No | CLOB orderbook update |
+| `positions` | Server → Client | Yes | Position balance update |
+| `system` | Server → Client | No | System notifications |
+| `authenticated` | Server → Client | Yes | Authentication confirmation |
+| `exception` | Server → Client | No | Error notifications |
+
+## Event Payloads
+
+### `newPriceData`
+
+```json
+{
+  "marketAddress": "0x1234...",
+  "updatedPrices": {
+    "yes": "0.65",
+    "no": "0.35"
+  },
+  "blockNumber": 12345678,
+  "timestamp": "2024-01-01T00:00:00.000Z"
+}
+```
+
+### `orderbookUpdate`
+
+```json
+{
+  "marketSlug": "btc-100k-weekly",
+  "orderbook": { ... },
+  "timestamp": "2024-01-01T00:00:00.000Z"
+}
+```
+
+### `positions`
+
+```json
+{
+  "account": "0xabcd...",
+  "marketAddress": "0x1234...",
+  "positions": [
+    {
+      "tokenId": "123456",
+      "balance": "1000000",
+      "outcomeIndex": 0
+    }
+  ],
+  "type": "AMM"
+}
+```

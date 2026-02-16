@@ -1,0 +1,48 @@
+---
+title: "API Reference"
+description: "Complete REST API documentation for Limitless Exchange"
+---
+
+## Base URL
+
+```
+https://api.limitless.exchange
+```
+
+## Authentication
+
+All authenticated endpoints require the `X-API-Key` header:
+
+```bash
+curl -H "X-API-Key: lmts_your_key_here" https://api.limitless.exchange/markets
+```
+
+See [Authentication](/developers/authentication) for details on obtaining an API key.
+
+## Endpoint Groups
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/api-reference/auth/get-signing-message">
+    Login, logout, and session verification.
+  </Card>
+  <Card title="Markets" icon="chart-line" href="/api-reference/markets/browse-active">
+    Browse, search, and get market details.
+  </Card>
+  <Card title="Trading" icon="arrow-right-arrow-left" href="/api-reference/trading/create-order">
+    Create, cancel, and manage orders.
+  </Card>
+  <Card title="Portfolio" icon="wallet" href="/api-reference/portfolio/positions">
+    Positions, trades, PnL, and history.
+  </Card>
+  <Card title="Public Portfolio" icon="globe" href="/api-reference/public-portfolio/positions">
+    Public user positions and volume.
+  </Card>
+</CardGroup>
+
+## Rate Limits
+
+Contact [hey@limitless.network](mailto:hey@limitless.network) for rate limit details.
+
+## WebSocket API
+
+For real-time data, see the [WebSocket Events](/developers/websocket-events) reference.

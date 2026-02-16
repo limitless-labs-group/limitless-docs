@@ -1,0 +1,67 @@
+---
+title: "Developer Overview"
+description: "Build on the Limitless Exchange API"
+---
+
+## Limitless Exchange API
+
+The Limitless Exchange API offers both **REST** and **WebSocket** integration for programmatic trading, market data, and portfolio management.
+
+**Base URL:** `https://api.limitless.exchange`
+
+**WebSocket URL:** `wss://ws.limitless.exchange`
+
+## Capabilities
+
+<CardGroup cols={2}>
+  <Card title="REST API" icon="server">
+    - Authenticate with API keys
+    - Fetch market data and venue info
+    - Create, sign, and submit orders (EIP-712)
+    - Manage portfolio and positions
+  </Card>
+  <Card title="WebSocket API" icon="plug">
+    - Real-time market price updates
+    - Orderbook streaming for CLOB markets
+    - Position change notifications
+  </Card>
+</CardGroup>
+
+## Quick Navigation
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/developers/authentication">
+    API key setup and authentication flow.
+  </Card>
+  <Card title="Python Quick Start" icon="python" href="/developers/quickstart/python">
+    End-to-end trading in Python.
+  </Card>
+  <Card title="Node.js Quick Start" icon="js" href="/developers/quickstart/nodejs">
+    TypeScript/Node.js integration with viem.
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Full endpoint documentation.
+  </Card>
+</CardGroup>
+
+## How Trading Works
+
+<Steps>
+
+<Step title="Authenticate">
+  Use your **API key** (`X-API-Key` header) for all requests. Generate keys via the [Limitless Exchange UI](https://limitless.exchange) → profile menu → Api keys.
+</Step>
+
+<Step title="Fetch Market Data">
+  `GET /markets/:slug` returns market info including **venue contract addresses** (fetch once per market and cache).
+</Step>
+
+<Step title="Build & Sign Orders">
+  Construct order payloads and sign with **EIP-712** using the venue's exchange address as `verifyingContract`.
+</Step>
+
+<Step title="Submit Orders">
+  `POST /orders` to submit signed orders and receive confirmations.
+</Step>
+
+</Steps>

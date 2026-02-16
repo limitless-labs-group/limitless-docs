@@ -1,0 +1,504 @@
+---
+title: "Java Quick Start"
+description: "End-to-end Java implementation with Web3j for trading on Limitless Exchange"
+---
+
+## Overview
+
+This guide walks you through a complete Java implementation for trading on Limitless Exchange: authentication, fetching market data, building and signing orders with EIP-712 via Web3j, and submitting them via the REST API.
+
+## Prerequisites
+
+<Steps>
+
+<Step title="Create a Gradle project">
+  Initialize a Gradle project with the following dependencies in `build.gradle`:
+</Step>
+
+<Step title="Add dependencies">
+  Include web3j, OkHttp, Jackson, and Bouncy Castle.
+</Step>
+
+</Steps>
+
+### build.gradle
+
+```groovy
+plugins {
+    id 'java'
+    id 'application'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.web3j:core:4.9.8'
+    implementation 'com.squareup.okhttp3:okhttp:4.11.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.76'
+}
+
+application {
+    mainClass = 'LimitlessQuickStart'
+}
+```
+
+<Warning>
+  **Never share your private key.** Store it in environment variables or a secure secrets manager. Do not hardcode it in source code or commit it to version control.
+</Warning>
+
+## Environment Variables
+
+Configure the following before running:
+
+| Variable | Description |
+|----------|-------------|
+| `PRIVATE_KEY` | Your wallet private key (with or without `0x` prefix) for EIP-712 signing |
+| `API_KEY` | API key from Limitless (starts with `lmts_`) |
+| `API_URL` | Optional; defaults to `https://api.limitless.exchange` |
+| `OWNER_ID` | Your profile ID (obtain from portfolio or auth endpoints) |
+
+## Authentication
+
+All API requests require the `X-API-Key` header. Cookie-based session auth is deprecated.
+
+<Note>
+  Your **private key** is used only for **EIP-712 order signing**. The **API key** handles request authentication. Both are required for trading.
+</Note>
+
+```java
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+
+String apiUrl = System.getenv().getOrDefault("API_URL", "https://api.limitless.exchange");
+String apiKey = System.getenv("API_KEY");
+
+OkHttpClient client = new OkHttpClient.Builder()
+    .cookieJar(new okhttp3.JavaNetCookieJar(new java.net.CookieManager()))
+    .build();
+
+Request.Builder requestBuilder(String path) {
+    return new Request.Builder()
+        .url(apiUrl + path)
+        .addHeader("X-API-Key", apiKey)
+        .addHeader("Content-Type", "application/json");
+}
+```
+
+<Warning>
+  Cookie-based authentication is **deprecated** and will be removed. Use API keys for all programmatic access.
+</Warning>
+
+## Fetching Market Data
+
+Use `GET /markets/:slug` to retrieve market details, including venue addresses and position IDs. Cache this data per market; it is static.
+
+```java
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+ObjectMapper mapper = new ObjectMapper();
+
+JsonNode fetchMarket(String slug) throws IOException {
+    Request req = requestBuilder("/markets/" + slug).get().build();
+    try (Response resp = client.newCall(req).execute()) {
+        if (!resp.isSuccessful()) throw new IOException("Market fetch failed: " + resp.code());
+        return mapper.readTree(resp.body().string());
+    }
+}
+```
+
+<CodeGroup>
+
+```java
+// Example response (CLOB market)
+// {
+//   "slug": "btc-above-100k-march-2025",
+//   "venue": { "exchange": "0xA1b2...", "adapter": "0xD4e5..." },
+//   "positionIds": ["19633...", "19633..."]  // [0]=YES, [1]=NO
+// }
+```
+
+```java
+// Handle both positionIds and position_ids (API may return either)
+JsonNode positionIds = market.has("positionIds")
+    ? market.get("positionIds")
+    : market.get("position_ids");
+String yesTokenId = positionIds.get(0).asText();
+String noTokenId = positionIds.get(1).asText();
+```
+
+</CodeGroup>
+
+<Tip>
+  **positionIds[0]** is the YES token, **positionIds[1]** is the NO token. Use the appropriate one based on your order side and outcome.
+</Tip>
+
+## Building Order Payloads
+
+Orders require specific fields. Key values:
+
+| Field | Value | Description |
+|-------|-------|-------------|
+| `side` | `0` | BUY |
+| `side` | `1` | SELL |
+| `signatureType` | `0` | EOA wallet |
+| `orderType` | `GTC` | Good Till Cancelled |
+| `orderType` | `FOK` | Fill or Kill |
+
+USDC uses **6 decimals** (1 USDC = 1,000,000 units). Shares are scaled by 1e6.
+
+<Accordion title="BUY order">
+  You pay USDC, receive shares. Use `positionIds[0]` for YES, `positionIds[1]` for NO.
+
+  ```
+  makerAmount = priceInDollars * numShares * 1e6   // USDC you pay
+  takerAmount = numShares * 1e6                      // Shares you receive
+  side = 0
+  ```
+
+  Example: BUY 10 YES shares at $0.65 → `makerAmount` = 6,500,000, `takerAmount` = 10,000,000
+</Accordion>
+
+<Accordion title="SELL order">
+  You pay shares, receive USDC. Use the token ID of the shares you are selling.
+
+  ```
+  makerAmount = numShares * 1e6                      // Shares you pay
+  takerAmount = priceInDollars * numShares * 1e6   // USDC you receive
+  side = 1
+  ```
+
+  Example: SELL 10 YES shares at $0.65 → `makerAmount` = 10,000,000, `takerAmount` = 6,500,000
+</Accordion>
+
+## EIP-712 Signing
+
+Sign orders using Web3j's `StructuredDataEncoder` and `Sign.signTypedData`. The venue's exchange address is the `verifyingContract`.
+
+<Info>
+  See [EIP-712 Order Signing](/developers/eip712-signing) for the full type definition and field reference.
+</Info>
+
+```java
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.web3j.crypto.Credentials;
+import org.web3j.crypto.Keys;
+import org.web3j.crypto.Sign;
+import org.web3j.utils.Numeric;
+
+import java.math.BigInteger;
+import java.util.HashMap;
+import java.util.Map;
+
+static final int CHAIN_ID = 8453;  // Base
+static final String ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+String signOrder(Map<String, Object> orderData, String verifyingContract, Credentials creds)
+        throws Exception {
+    String json = buildEip712Json(orderData, Keys.toChecksumAddress(verifyingContract));
+    Sign.SignatureData sig = Sign.signTypedData(json, creds.getEcKeyPair());
+
+    byte[] sigBytes = new byte[65];
+    System.arraycopy(sig.getR(), 0, sigBytes, 0, 32);
+    System.arraycopy(sig.getS(), 0, sigBytes, 32, 32);
+    System.arraycopy(sig.getV(), 0, sigBytes, 64, 1);
+
+    return Numeric.toHexString(sigBytes);
+}
+
+String buildEip712Json(Map<String, Object> orderData, String verifyingContract) {
+    Map<String, Object> domain = Map.of(
+        "name", "Limitless CTF Exchange",
+        "version", "1",
+        "chainId", CHAIN_ID,
+        "verifyingContract", verifyingContract
+    );
+
+    Map<String, Object> message = new HashMap<>();
+    message.put("salt", orderData.get("salt"));
+    message.put("maker", Keys.toChecksumAddress((String) orderData.get("maker")));
+    message.put("signer", Keys.toChecksumAddress((String) orderData.get("signer")));
+    message.put("taker", Keys.toChecksumAddress((String) orderData.get("taker")));
+    message.put("tokenId", orderData.get("tokenId"));
+    message.put("makerAmount", orderData.get("makerAmount"));
+    message.put("takerAmount", orderData.get("takerAmount"));
+    message.put("expiration", orderData.get("expiration"));
+    message.put("nonce", orderData.get("nonce"));
+    message.put("feeRateBps", orderData.get("feeRateBps"));
+    message.put("side", orderData.get("side"));
+    message.put("signatureType", orderData.get("signatureType"));
+
+    return """
+        {
+          "types": {
+            "EIP712Domain": [
+              {"name": "name", "type": "string"},
+              {"name": "version", "type": "string"},
+              {"name": "chainId", "type": "uint256"},
+              {"name": "verifyingContract", "type": "address"}
+            ],
+            "Order": [
+              {"name": "salt", "type": "uint256"},
+              {"name": "maker", "type": "address"},
+              {"name": "signer", "type": "address"},
+              {"name": "taker", "type": "address"},
+              {"name": "tokenId", "type": "uint256"},
+              {"name": "makerAmount", "type": "uint256"},
+              {"name": "takerAmount", "type": "uint256"},
+              {"name": "expiration", "type": "uint256"},
+              {"name": "nonce", "type": "uint256"},
+              {"name": "feeRateBps", "type": "uint256"},
+              {"name": "side", "type": "uint8"},
+              {"name": "signatureType", "type": "uint8"}
+            ]
+          },
+          "primaryType": "Order",
+          "domain": %s,
+          "message": %s
+        }
+        """.formatted(
+            new ObjectMapper().writeValueAsString(domain),
+            new ObjectMapper().writeValueAsString(message)
+        );
+}
+```
+
+<Note>
+  All addresses must be **checksummed** (EIP-55). Use `Keys.toChecksumAddress()`.
+</Note>
+
+## Submitting Orders
+
+Send the signed order to `POST /orders`:
+
+```java
+import okhttp3.MediaType;
+import okhttp3.RequestBody;
+
+JsonNode submitOrder(Map<String, Object> payload) throws IOException {
+    String json = mapper.writeValueAsString(payload);
+    Request req = requestBuilder("/orders")
+        .post(RequestBody.create(json, MediaType.parse("application/json")))
+        .build();
+    try (Response resp = client.newCall(req).execute()) {
+        if (!resp.isSuccessful()) throw new IOException("Order failed: " + resp.code());
+        return mapper.readTree(resp.body().string());
+    }
+}
+```
+
+## Complete Example
+
+<CodeGroup>
+
+```java
+package limitless;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import okhttp3.*;
+import org.web3j.crypto.Credentials;
+import org.web3j.crypto.Keys;
+import org.web3j.crypto.Sign;
+import org.web3j.utils.Numeric;
+
+import java.math.BigInteger;
+import java.util.HashMap;
+import java.util.Map;
+
+public class LimitlessQuickStart {
+
+    static final String API_URL = System.getenv().getOrDefault("API_URL", "https://api.limitless.exchange");
+    static final int CHAIN_ID = 8453;
+    static final String ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+    final OkHttpClient client;
+    final ObjectMapper mapper = new ObjectMapper();
+    final String apiKey;
+    final Credentials credentials;
+    final long ownerId;
+
+    public LimitlessQuickStart() {
+        apiKey = System.getenv("API_KEY");
+        credentials = Credentials.create(System.getenv("PRIVATE_KEY"));
+        ownerId = Long.parseLong(System.getenv().getOrDefault("OWNER_ID", "0"));
+        client = new OkHttpClient.Builder()
+            .cookieJar(new okhttp3.JavaNetCookieJar(new java.net.CookieManager()))
+            .build();
+    }
+
+    Request.Builder req(String path) {
+        return new Request.Builder()
+            .url(API_URL + path)
+            .addHeader("X-API-Key", apiKey)
+            .addHeader("Content-Type", "application/json");
+    }
+
+    JsonNode fetchMarket(String slug) throws Exception {
+        try (Response r = client.newCall(req("/markets/" + slug).get().build()).execute()) {
+            if (!r.isSuccessful()) throw new RuntimeException("Market fetch failed: " + r.code());
+            return mapper.readTree(r.body().string());
+        }
+    }
+
+    String signOrder(Map<String, Object> orderData, String verifyingContract) throws Exception {
+        String json = buildEip712Json(orderData, Keys.toChecksumAddress(verifyingContract));
+        Sign.SignatureData sig = Sign.signTypedData(json, credentials.getEcKeyPair());
+        byte[] b = new byte[65];
+        System.arraycopy(sig.getR(), 0, b, 0, 32);
+        System.arraycopy(sig.getS(), 0, b, 32, 32);
+        System.arraycopy(sig.getV(), 0, b, 64, 1);
+        return Numeric.toHexString(b);
+    }
+
+    String buildEip712Json(Map<String, Object> orderData, String verifyingContract) throws Exception {
+        Map<String, Object> domain = Map.of(
+            "name", "Limitless CTF Exchange", "version", "1",
+            "chainId", CHAIN_ID, "verifyingContract", verifyingContract);
+        Map<String, Object> msg = new HashMap<>(orderData);
+        msg.put("maker", Keys.toChecksumAddress((String) msg.get("maker")));
+        msg.put("signer", Keys.toChecksumAddress((String) msg.get("signer")));
+        msg.put("taker", Keys.toChecksumAddress((String) msg.get("taker")));
+        return """
+            {"types":{"EIP712Domain":[{"name":"name","type":"string"},{"name":"version","type":"string"},{"name":"chainId","type":"uint256"},{"name":"verifyingContract","type":"address"}],"Order":[{"name":"salt","type":"uint256"},{"name":"maker","type":"address"},{"name":"signer","type":"address"},{"name":"taker","type":"address"},{"name":"tokenId","type":"uint256"},{"name":"makerAmount","type":"uint256"},{"name":"takerAmount","type":"uint256"},{"name":"expiration","type":"uint256"},{"name":"nonce","type":"uint256"},{"name":"feeRateBps","type":"uint256"},{"name":"side","type":"uint8"},{"name":"signatureType","type":"uint8"}]},"primaryType":"Order","domain":%s,"message":%s}
+            """.formatted(mapper.writeValueAsString(domain), mapper.writeValueAsString(msg));
+    }
+
+    JsonNode placeBuyOrder(String marketSlug, double numShares, double pricePerShare, String orderType)
+            throws Exception {
+        JsonNode market = fetchMarket(marketSlug);
+        JsonNode venue = market.get("venue");
+        JsonNode posIds = market.has("positionIds") ? market.get("positionIds") : market.get("position_ids");
+        String tokenId = posIds.get(0).asText();
+        String exchange = venue.get("exchange").asText();
+
+        long makerAmount = (long) (pricePerShare * numShares * 1e6);
+        long takerAmount = (long) (numShares * 1e6);
+        long salt = System.currentTimeMillis();
+
+        Map<String, Object> orderData = new HashMap<>();
+        orderData.put("salt", salt);
+        orderData.put("maker", credentials.getAddress());
+        orderData.put("signer", credentials.getAddress());
+        orderData.put("taker", ZERO_ADDRESS);
+        orderData.put("tokenId", new BigInteger(tokenId));
+        orderData.put("makerAmount", BigInteger.valueOf(makerAmount));
+        orderData.put("takerAmount", BigInteger.valueOf(takerAmount));
+        orderData.put("expiration", BigInteger.ZERO);
+        orderData.put("nonce", BigInteger.ZERO);
+        orderData.put("feeRateBps", BigInteger.ZERO);
+        orderData.put("side", 0);
+        orderData.put("signatureType", 0);
+
+        String sig = signOrder(orderData, exchange);
+        orderData.put("signature", sig);
+
+        ObjectNode payload = mapper.createObjectNode();
+        payload.putPOJO("order", orderData);
+        payload.put("ownerId", ownerId);
+        payload.put("orderType", orderType);
+        payload.put("marketSlug", marketSlug);
+
+        try (Response r = client.newCall(req("/orders")
+            .post(RequestBody.create(payload.toString(), MediaType.parse("application/json")))
+            .build()).execute()) {
+            if (!r.isSuccessful()) throw new RuntimeException("Order failed: " + r.code());
+            return mapper.readTree(r.body().string());
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        LimitlessQuickStart app = new LimitlessQuickStart();
+        JsonNode result = app.placeBuyOrder("your-market-slug", 10.0, 0.65, "GTC");
+        System.out.println(result);
+    }
+}
+```
+
+```bash
+# Build and run
+export PRIVATE_KEY="0x..."
+export API_KEY="lmts_your_key_here"
+export OWNER_ID="12345"
+./gradlew run
+```
+
+</CodeGroup>
+
+<Tip>
+  **ownerId** is your profile ID. Obtain it from your first authenticated response (e.g. portfolio or auth endpoints) or from the Limitless UI. Set `OWNER_ID` in your environment.
+</Tip>
+
+## Build and Run
+
+<Steps>
+
+<Step title="Set environment variables">
+  ```bash
+  export PRIVATE_KEY="0x..."
+  export API_KEY="lmts_your_key_here"
+  export OWNER_ID="12345"
+  export API_URL="https://api.limitless.exchange"  # optional
+  ```
+</Step>
+
+<Step title="Build">
+  ```bash
+  ./gradlew build
+  ```
+</Step>
+
+<Step title="Run">
+  ```bash
+  ./gradlew run
+  ```
+</Step>
+
+</Steps>
+
+## Troubleshooting
+
+<Steps>
+
+<Step title="401 Unauthorized">
+  Ensure `X-API-Key` is set correctly and the key starts with `lmts_`. Check that the key is active in the Limitless UI.
+</Step>
+
+<Step title="400 Invalid order / signature mismatch">
+  - Verify `verifyingContract` is the market's `venue.exchange` address.
+  - Ensure all addresses are checksummed (EIP-55) via `Keys.toChecksumAddress()`.
+  - Confirm `makerAmount` and `takerAmount` use 1e6 scaling for USDC and shares.
+</Step>
+
+<Step title="Insufficient balance or allowance">
+  - Ensure you have enough USDC on Base for BUY orders.
+  - Approve USDC to `venue.exchange` for BUY; Conditional Tokens to `venue.exchange` (and `venue.adapter` for NegRisk SELL) for SELL.
+</Step>
+
+<Step title="Wrong tokenId">
+  Use `positionIds[0]` for YES and `positionIds[1]` for NO. Double-check you are trading the correct outcome.
+</Step>
+
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="EIP-712 Signing" icon="pen" href="/developers/eip712-signing">
+    Full order type definition and field reference.
+  </Card>
+  <Card title="Venue System" icon="building" href="/developers/venue-system">
+    Understanding venue contracts and token approvals.
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Complete endpoint documentation.
+  </Card>
+  <Card title="Authentication" icon="key" href="/developers/authentication">
+    API key setup and best practices.
+  </Card>
+</CardGroup>

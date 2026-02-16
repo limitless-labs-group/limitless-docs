@@ -1,0 +1,188 @@
+---
+title: "Python SDK"
+description: "Official async Python SDK for the Limitless Exchange API"
+---
+
+## Overview
+
+The Limitless Exchange Python SDK (`limitless-sdk`) is an **async-first** Python client built on top of aiohttp. It provides:
+
+- Fully asynchronous HTTP and WebSocket clients
+- Pydantic models for type-safe request and response handling
+- Automatic venue caching for EIP-712 order signing
+- Built-in retry logic for transient API failures
+- WebSocket streaming with auto-reconnect
+
+<Note>
+  The SDK requires **Python 3.9+** and uses `async`/`await` throughout. All network calls must be awaited inside an `asyncio` event loop.
+</Note>
+
+## Installation
+
+```bash
+pip install limitless-sdk
+```
+
+## Quick Start
+
+<Steps>
+
+<Step title="Initialize the HTTP client">
+
+  ```python
+  import asyncio
+  from limitless.http_client import HttpClient
+
+  http_client = HttpClient()  # loads LIMITLESS_API_KEY from env
+  ```
+
+</Step>
+
+<Step title="Fetch active markets">
+
+  ```python
+  from limitless.market_fetcher import MarketFetcher
+
+  async def main():
+      market_fetcher = MarketFetcher(http_client)
+      markets = await market_fetcher.get_active_markets()
+
+      for market in markets["data"]:
+          print(market["title"], market["slug"])
+
+      await http_client.close()
+
+  asyncio.run(main())
+  ```
+
+</Step>
+
+<Step title="Check your positions">
+
+  ```python
+  from limitless.portfolio_fetcher import PortfolioFetcher
+
+  async def main():
+      portfolio = PortfolioFetcher(http_client)
+      positions = await portfolio.get_positions()
+
+      for pos in positions.get("clob", []):
+          print(pos["market"]["title"], pos["size"])
+
+      await http_client.close()
+
+  asyncio.run(main())
+  ```
+
+</Step>
+
+</Steps>
+
+## Authentication
+
+The SDK authenticates using an API key passed via the `X-API-Key` header.
+
+<Tabs>
+  <Tab title="Environment variable (recommended)">
+    Set the `LIMITLESS_API_KEY` environment variable. The `HttpClient` loads it automatically:
+
+    ```bash
+    export LIMITLESS_API_KEY="lmts_your_key_here"
+    ```
+
+    ```python
+    http_client = HttpClient()  # auto-loads LIMITLESS_API_KEY
+    ```
+  </Tab>
+  <Tab title="Explicit parameter">
+    Pass `api_key` directly to the constructor:
+
+    ```python
+    http_client = HttpClient(api_key="lmts_your_key_here")
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Never hardcode API keys in source code or commit them to version control. Use environment variables or a secrets manager.
+</Warning>
+
+## HttpClient Constructor
+
+The `HttpClient` accepts the following parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `base_url` | `str` | `https://api.limitless.exchange` | API base URL |
+| `api_key` | `str \| None` | `None` (reads `LIMITLESS_API_KEY` env) | API key for authentication |
+| `additional_headers` | `dict \| None` | `None` | Extra headers merged into every request |
+
+```python
+http_client = HttpClient(
+    base_url="https://api.limitless.exchange",
+    api_key="lmts_your_key_here",
+    additional_headers={"X-Custom-Header": "value"},
+)
+```
+
+<Tip>
+  Always call `await http_client.close()` when you are finished to cleanly shut down the underlying aiohttp session.
+</Tip>
+
+## Logging
+
+The SDK provides a `ConsoleLogger` with configurable log levels for debugging:
+
+```python
+from limitless.logger import ConsoleLogger, LogLevel
+
+logger = ConsoleLogger(level=LogLevel.DEBUG)
+```
+
+| Level | Description |
+|-------|-------------|
+| `LogLevel.DEBUG` | Verbose output including headers, venue cache operations, and raw payloads |
+| `LogLevel.INFO` | General operational messages |
+| `LogLevel.WARN` | Warnings about potential issues |
+| `LogLevel.ERROR` | Errors only |
+
+<Tip>
+  Set `LogLevel.DEBUG` during development to see request headers, venue cache hits/misses, and full API responses. Switch to `INFO` or `WARN` in production.
+</Tip>
+
+## Source Code
+
+The SDK is open source. Contributions and issue reports are welcome.
+
+<Card title="GitHub Repository" icon="github" href="https://github.com/limitless-labs-group/limitless-sdk">
+  Browse the source, report issues, and contribute at github.com/limitless-labs-group/limitless-sdk
+</Card>
+
+## Disclaimer
+
+<Warning>
+  **USE AT YOUR OWN RISK.** This SDK is provided as-is with no guarantees. You are solely responsible for any trading activity conducted through this software. Limitless Exchange is not available to users in the United States or other restricted jurisdictions. By using this SDK, you confirm compliance with all applicable local laws and regulations.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Markets" icon="chart-bar" href="/developers/sdk/python/markets">
+    Discover markets, fetch orderbooks, and understand venue caching.
+  </Card>
+  <Card title="Trading & Orders" icon="arrow-right-arrow-left" href="/developers/sdk/python/orders">
+    Place GTC and FOK orders, cancel orders, and manage token approvals.
+  </Card>
+  <Card title="Portfolio & Positions" icon="wallet" href="/developers/sdk/python/portfolio">
+    Track your open positions and trading history.
+  </Card>
+  <Card title="WebSocket Streaming" icon="bolt" href="/developers/sdk/python/websocket">
+    Subscribe to real-time orderbook and price updates.
+  </Card>
+  <Card title="Error Handling & Retry" icon="rotate" href="/developers/sdk/python/error-handling">
+    Retry logic, error types, and debugging strategies.
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Full REST API endpoint documentation.
+  </Card>
+</CardGroup>
