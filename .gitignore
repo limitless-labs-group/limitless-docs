@@ -3,8 +3,7 @@ node_modules/
 .agents/
 .cursor/
 
-# Reference materials (SDK repos + OpenAPI spec are for reference only)
+# Reference materials (SDK repos are for reference only)
 limitless-sdk/
 limitless-exchange-ts-sdk/
-openapi.json
 docs-reference/
