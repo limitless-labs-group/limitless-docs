@@ -31,7 +31,7 @@ pip install limitless-sdk
 
   ```python
   import asyncio
-  from limitless.http_client import HttpClient
+  from limitless_sdk.api import HttpClient
 
   http_client = HttpClient()  # loads LIMITLESS_API_KEY from env
   ```
@@ -41,7 +41,7 @@ pip install limitless-sdk
 <Step title="Fetch active markets">
 
   ```python
-  from limitless.market_fetcher import MarketFetcher
+  from limitless_sdk.markets import MarketFetcher
 
   async def main():
       market_fetcher = MarketFetcher(http_client)
@@ -60,7 +60,7 @@ pip install limitless-sdk
 <Step title="Check your positions">
 
   ```python
-  from limitless.portfolio_fetcher import PortfolioFetcher
+  from limitless_sdk.portfolio import PortfolioFetcher
 
   async def main():
       portfolio = PortfolioFetcher(http_client)
@@ -134,7 +134,7 @@ http_client = HttpClient(
 The SDK provides a `ConsoleLogger` with configurable log levels for debugging:
 
 ```python
-from limitless.logger import ConsoleLogger, LogLevel
+from limitless_sdk.types import ConsoleLogger, LogLevel
 
 logger = ConsoleLogger(level=LogLevel.DEBUG)
 ```

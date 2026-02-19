@@ -10,7 +10,7 @@ The `WebSocketClient` provides real-time streaming of orderbook updates and pric
 ## Setup
 
 ```python
-from limitless.ws_client import WebSocketClient, WebSocketConfig
+from limitless_sdk.websocket import WebSocketClient, WebSocketConfig
 
 config = WebSocketConfig(
     url="wss://ws.limitless.exchange",
@@ -95,7 +95,7 @@ When `auto_reconnect` is enabled (the default), the client automatically reconne
 
 ```python
 import asyncio
-from limitless.ws_client import WebSocketClient, WebSocketConfig
+from limitless_sdk.websocket import WebSocketClient, WebSocketConfig
 
 async def main():
     config = WebSocketConfig(

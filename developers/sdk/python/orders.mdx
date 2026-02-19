@@ -14,9 +14,10 @@ Before placing orders, you need four components:
 ```python
 import asyncio
 from eth_account import Account
-from limitless.http_client import HttpClient
-from limitless.market_fetcher import MarketFetcher
-from limitless.order_client import OrderClient, Side, OrderType
+from limitless_sdk.api import HttpClient
+from limitless_sdk.markets import MarketFetcher
+from limitless_sdk.orders import OrderClient
+from limitless_sdk.types import Side, OrderType
 
 http_client = HttpClient()  # loads LIMITLESS_API_KEY from env
 account = Account.from_key("0xYOUR_PRIVATE_KEY")
@@ -49,7 +50,7 @@ Before your first trade on a given venue, you must approve the exchange contract
     w3 = Web3(Web3.HTTPProvider("https://mainnet.base.org"))
 
     USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-    CT_ADDRESS = "0x..."  # Conditional Token framework address
+    CT_ADDRESS = "0xC9c98965297Bc527861c898329Ee280632B76e18"  # Conditional Token framework address
 
     market = await market_fetcher.get_market("your-market-slug")
     exchange = market.venue.exchange
@@ -233,7 +234,7 @@ FOK orders execute immediately and fully, or are rejected entirely. Instead of `
 The SDK raises `APIError` for non-2xx responses. Always wrap order calls in try/except:
 
 ```python
-from limitless.exceptions import APIError
+from limitless_sdk.api import APIError
 
 try:
     result = await order_client.create_order(
@@ -257,10 +258,10 @@ except APIError as e:
 ```python
 import asyncio
 from eth_account import Account
-from limitless.http_client import HttpClient
-from limitless.market_fetcher import MarketFetcher
-from limitless.order_client import OrderClient, Side, OrderType
-from limitless.exceptions import APIError
+from limitless_sdk.api import HttpClient, APIError
+from limitless_sdk.markets import MarketFetcher
+from limitless_sdk.orders import OrderClient
+from limitless_sdk.types import Side, OrderType
 
 async def main():
     http_client = HttpClient()

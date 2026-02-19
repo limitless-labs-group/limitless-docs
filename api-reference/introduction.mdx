@@ -64,4 +64,11 @@ For real-time orderbook and position updates, see the [WebSocket Events](/develo
 
 ## Rate Limits
 
-Contact [hey@limitless.network](mailto:hey@limitless.network) for rate limit details.
+| Limit | Value |
+|-------|-------|
+| **Max concurrent requests** | 2 |
+| **Min delay between calls** | 300ms |
+
+<Warning>
+  Exceeding rate limits will return `429 Too Many Requests`. Use exponential backoff or the SDK's built-in retry mechanisms. Contact [hey@limitless.network](mailto:hey@limitless.network) for higher limits.
+</Warning>

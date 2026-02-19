@@ -11,11 +11,14 @@ Limitless Exchange runs on **Base** (Ethereum L2). All trading is settled onchai
   To pull Limitless trading metrics, query **all three venue versions** of smart contracts. Each processes active trades — partial queries give you incomplete data.
 </Warning>
 
-## Conditional Tokens
+## Key Token Addresses
 
-```
-0xc9c98965297bc527861c898329ee280632b76e18
-```
+| Token | Address | Standard |
+|-------|---------|----------|
+| **USDC** (Native on Base) | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | ERC-20 |
+| **Conditional Tokens (CTF)** | `0xC9c98965297Bc527861c898329Ee280632B76e18` | ERC-1155 |
+
+## Conditional Tokens
 
 Limitless uses the [Gnosis Conditional Tokens Framework (CTF)](https://docs.gnosis.io/conditionaltokens/) — an ERC-1155 token standard that enables the creation of conditional outcome tokens for any future event. When a market is created, the CTF contract mints Yes and No tokens representing each outcome. These tokens are freely tradeable and composable with other DeFi protocols.
 

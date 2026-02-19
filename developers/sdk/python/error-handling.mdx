@@ -12,7 +12,7 @@ The SDK provides structured error types, a retry decorator for transient failure
 All non-2xx HTTP responses from the API raise an `APIError` exception:
 
 ```python
-from limitless.exceptions import APIError
+from limitless_sdk.api import APIError
 
 try:
     result = await order_client.create_order(
@@ -49,7 +49,7 @@ except APIError as e:
 Use the `@retry_on_errors` decorator to automatically retry operations that fail with specific status codes:
 
 ```python
-from limitless.retry import retry_on_errors
+from limitless_sdk.api import retry_on_errors
 
 @retry_on_errors(
     status_codes={500, 429},
@@ -86,8 +86,7 @@ result = await place_order_with_retry()
 For broader retry coverage, wrap your `HttpClient` with the `RetryableClient`. This applies retry logic to **all** API calls made through the client:
 
 ```python
-from limitless.http_client import HttpClient
-from limitless.retry import RetryableClient
+from limitless_sdk.api import HttpClient, RetryableClient
 
 http_client = HttpClient()
 retryable_client = RetryableClient(
@@ -111,7 +110,7 @@ order_client = OrderClient(retryable_client, account)
 Enable verbose logging to trace requests, responses, and internal operations:
 
 ```python
-from limitless.logger import ConsoleLogger, LogLevel
+from limitless_sdk.types import ConsoleLogger, LogLevel
 
 logger = ConsoleLogger(level=LogLevel.DEBUG)
 ```
@@ -193,3 +192,33 @@ At `DEBUG` level, the logger outputs:
 </Step>
 
 </Steps>
+
+## Known Issues and Workarounds
+
+<Accordion title="NoOpLogger .warning() bug">
+  The SDK's `NoOpLogger` calls `.warning()` but the logger interface only defines `.warn()`. Add this patch at the top of your script:
+
+  ```python
+  from limitless_sdk.types.logger import NoOpLogger
+  NoOpLogger.warning = lambda self, msg, context=None: None
+  ```
+</Accordion>
+
+<Accordion title="get_orderbook() Pydantic validation error">
+  `MarketFetcher.get_orderbook()` may throw a Pydantic `ValidationError` when `lastTradePrice` is `null`. Use `curl` as a workaround:
+
+  ```python
+  import subprocess, json
+
+  def get_orderbook(slug: str):
+      r = subprocess.run(
+          ['curl', '-s', f'https://api.limitless.exchange/markets/{slug}/orderbook'],
+          capture_output=True, text=True,
+      )
+      return json.loads(r.stdout)
+  ```
+</Accordion>
+
+<Accordion title="urllib.request returns 403">
+  Python's built-in `urllib.request` gets blocked by the API (403 Forbidden). Use the SDK's `HttpClient`, the `requests` library, or `curl` via subprocess instead.
+</Accordion>

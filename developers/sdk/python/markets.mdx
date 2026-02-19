@@ -10,8 +10,8 @@ The `MarketFetcher` class handles market discovery, individual market lookups, a
 ## Setup
 
 ```python
-from limitless.http_client import HttpClient
-from limitless.market_fetcher import MarketFetcher
+from limitless_sdk.api import HttpClient
+from limitless_sdk.markets import MarketFetcher
 
 http_client = HttpClient()  # loads LIMITLESS_API_KEY from env
 market_fetcher = MarketFetcher(http_client)
@@ -129,7 +129,7 @@ Every call to `get_market()` automatically caches the venue contract addresses (
 Enable `DEBUG` logging to see venue cache operations:
 
 ```python
-from limitless.logger import ConsoleLogger, LogLevel
+from limitless_sdk.types import ConsoleLogger, LogLevel
 
 logger = ConsoleLogger(level=LogLevel.DEBUG)
 
@@ -142,8 +142,8 @@ logger = ConsoleLogger(level=LogLevel.DEBUG)
 
 ```python
 import asyncio
-from limitless.http_client import HttpClient
-from limitless.market_fetcher import MarketFetcher
+from limitless_sdk.api import HttpClient
+from limitless_sdk.markets import MarketFetcher
 
 async def main():
     http_client = HttpClient()

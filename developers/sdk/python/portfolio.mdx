@@ -10,8 +10,8 @@ The `PortfolioFetcher` class retrieves your open positions and portfolio data fr
 ## Setup
 
 ```python
-from limitless.http_client import HttpClient
-from limitless.portfolio_fetcher import PortfolioFetcher
+from limitless_sdk.api import HttpClient
+from limitless_sdk.portfolio import PortfolioFetcher
 
 http_client = HttpClient()  # loads LIMITLESS_API_KEY from env
 portfolio = PortfolioFetcher(http_client)
@@ -84,8 +84,8 @@ for pos in positions.get("clob", []):
 
 ```python
 import asyncio
-from limitless.http_client import HttpClient
-from limitless.portfolio_fetcher import PortfolioFetcher
+from limitless_sdk.api import HttpClient
+from limitless_sdk.portfolio import PortfolioFetcher
 
 async def main():
     http_client = HttpClient()
