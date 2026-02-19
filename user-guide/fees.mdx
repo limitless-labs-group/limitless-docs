@@ -15,15 +15,12 @@ A flat **0.25%** fee applies to all trades. No curves, no complexity.
 
 ### Order Book (CLOB) Markets
 
-Fees are dynamic and range from **0.03% to 3%** — the higher the probability of the event, the lower the fee.
+Fees are dynamic and adjust based on the current market price:
 
-| Factor | How It Works |
-|--------|-------------|
-| **Fee range** | 0.03% – 3% |
-| **Low probability trades** | Higher fee, but better payout odds |
-| **High probability trades** | Lower fee, but worse odds |
-| **Buy-side fees** | Paid in outcome tokens (contracts) |
-| **Sell-side fees** | 0% to 1.5% as event probability approaches 50%, paid in collateral (USDC) |
+| Side | Fee Range | Paid In |
+|------|-----------|---------|
+| **Buy** | 0.40% – 3.00% | Outcome tokens (contracts) |
+| **Sell** | 0.42% – 1.50% | Collateral (USDC) |
 
 ## Makers vs Takers
 
@@ -42,19 +39,45 @@ If you provide liquidity to the book, you can trade **completely fee-free**.
 
 The fee curve adjusts dynamically based on where the market price is when you trade.
 
-### Buy Trades
+### Buy Fee Curve
 
-| Scenario | Fee | Odds |
-|----------|-----|------|
-| **Buy early** (price ≤ 0.50) | Base fee (up to 3%) | Best odds — higher potential payout |
-| **Buy late** (price > 0.50) | Lower fee | Higher price, worse odds |
+Buy fees start at 3.00% for low-probability markets and decrease as probability increases:
 
-### Sell Trades
+| Price | Buy Fee |
+|-------|---------|
+| &#36;0.01 – &#36;0.50 | 3.00% |
+| &#36;0.55 | 2.52% |
+| &#36;0.60 | 2.13% |
+| &#36;0.65 | 1.80% |
+| &#36;0.70 | 1.51% |
+| &#36;0.75 | 1.26% |
+| &#36;0.80 | 1.05% |
+| &#36;0.85 | 0.85% |
+| &#36;0.90 | 0.68% |
+| &#36;0.95 | 0.53% |
+| &#36;0.99 | 0.42% |
+| &#36;0.999 | 0.40% |
 
-| Scenario | Fee | Why |
-|----------|-----|-----|
-| **Sell far from 0.50** | Lower fee | Clear conviction, low manipulation risk |
-| **Sell at 0.50** (50/50) | Highest fee (up to 1.5%) | Maximum uncertainty — discourages opportunistic exits |
+### Sell Fee Curve
+
+Sell fees peak at the midpoint (&#36;0.50) and decrease toward the extremes:
+
+| Price | Sell Fee |
+|-------|----------|
+| &#36;0.01 | 0.42% |
+| &#36;0.05 | 0.60% |
+| &#36;0.10 | 0.78% |
+| &#36;0.20 | 1.11% |
+| &#36;0.30 | 1.32% |
+| &#36;0.40 | 1.44% |
+| &#36;0.50 | **1.50%** (peak) |
+| &#36;0.60 | 1.44% |
+| &#36;0.70 | 1.32% |
+| &#36;0.80 | 1.11% |
+| &#36;0.90 | 0.78% |
+| &#36;0.95 | 0.60% |
+| &#36;0.99 | 0.45% |
+| &#36;0.999 | 0.42% |
 
 <Info>
   By discouraging exits at the midpoint, the fee curve protects market integrity when uncertainty is highest.
@@ -71,11 +94,11 @@ Imagine you're buying **YES** shares in a market where the current probability i
 </Step>
 
 <Step title="Market moves to 70%">
-  If you sell when the market hits 70%, you pay a **lower sell fee** because you're far from the 50/50 uncertainty zone.
+  If you sell when the market hits 70%, you pay a **1.32% sell fee** because you're away from the 50/50 uncertainty zone.
 </Step>
 
 <Step title="Someone else buys at 70%">
-  They pay a **lower buy fee**, but get worse odds since the price is already high.
+  They pay a **1.51% buy fee** — lower than yours, but they get worse odds since the price is already high.
 </Step>
 
 </Steps>

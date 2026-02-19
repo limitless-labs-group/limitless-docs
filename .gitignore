@@ -12,3 +12,4 @@ api-1.json
 *.xml
 .DS_Store
 limitless-docs-audit.md
+client_secret_*.json
