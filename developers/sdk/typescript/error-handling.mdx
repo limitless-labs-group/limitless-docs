@@ -235,3 +235,67 @@ const result = await orderQueue.enqueue(() =>
 );
 ```
 </Accordion>
+
+## Logging
+
+The SDK provides optional logging through a simple `ILogger` interface. Logging is completely opt-in with zero overhead by default.
+
+### Quick Start
+
+```typescript
+import { HttpClient, ConsoleLogger } from '@limitless-exchange/sdk';
+
+const logger = new ConsoleLogger('info');
+
+const httpClient = new HttpClient({
+  baseURL: 'https://api.limitless.exchange',
+  apiKey: process.env.LIMITLESS_API_KEY,
+  logger,
+});
+```
+
+### Log Levels
+
+| Level | What's Logged |
+|-------|--------------|
+| `debug` | Request headers (API key redacted), request/response bodies, WebSocket events |
+| `info` | API requests (method + URL), successful responses, order creation/cancellation |
+| `warn` | Warnings only |
+| `error` | API errors (with status code), network errors, WebSocket connection errors |
+
+### Custom Logger for Production
+
+Implement the `ILogger` interface to integrate with your own logging infrastructure:
+
+```typescript
+import { ILogger } from '@limitless-exchange/sdk';
+
+class MyLogger implements ILogger {
+  debug(message: string, meta?: Record<string, any>): void { /* ... */ }
+  info(message: string, meta?: Record<string, any>): void { /* ... */ }
+  warn(message: string, meta?: Record<string, any>): void { /* ... */ }
+  error(message: string, error?: Error, meta?: Record<string, any>): void { /* ... */ }
+}
+
+const httpClient = new HttpClient({
+  baseURL: 'https://api.limitless.exchange',
+  apiKey: process.env.LIMITLESS_API_KEY,
+  logger: new MyLogger(),
+});
+```
+
+### Passing Logger to SDK Components
+
+All SDK components accept an optional logger:
+
+```typescript
+const logger = new ConsoleLogger('info');
+
+const httpClient = new HttpClient({ baseURL: '...', logger });
+const marketFetcher = new MarketFetcher(httpClient, logger);
+const orderClient = new OrderClient({ httpClient, wallet, logger });
+```
+
+<Note>
+  The SDK automatically redacts API keys in logs (shown as `***`). Private keys are never logged.
+</Note>
