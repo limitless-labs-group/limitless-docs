@@ -131,6 +131,7 @@
             "group": "Markets",
             "pages": [
               "api-reference/markets/browse-active",
+              "api-reference/markets/browse-active-category",
               "api-reference/markets/category-count",
               "api-reference/markets/active-slugs",
               "api-reference/markets/get-market",
