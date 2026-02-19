@@ -1,0 +1,10 @@
+---
+title: "Get Market Page by Path"
+openapi: "GET /market-pages/by-path"
+---
+
+<Info>
+  Supports home page resolution via `path=/` or empty `path=`. If no Home page is configured, returns a synthetic page (id `__home__`) with an empty base filter.
+
+  May return a `301` redirect if the path has been moved.
+</Info>

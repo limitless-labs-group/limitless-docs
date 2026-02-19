@@ -164,6 +164,17 @@
             ]
           },
           {
+            "group": "Market Navigation",
+            "pages": [
+              "api-reference/navigation/get-navigation",
+              "api-reference/navigation/get-page-by-path",
+              "api-reference/navigation/list-page-markets",
+              "api-reference/navigation/list-property-keys",
+              "api-reference/navigation/get-property-key",
+              "api-reference/navigation/list-property-options"
+            ]
+          },
+          {
             "group": "Public Portfolio",
             "pages": [
               "api-reference/public-portfolio/traded-volume",

@@ -26,6 +26,10 @@
       "description": "Browse, search, and analyze prediction markets"
     },
     {
+      "name": "Market Navigation",
+      "description": "Navigation tree, market pages, and property filters"
+    },
+    {
       "name": "Trading",
       "description": "Create, manage, and cancel orders"
     },
@@ -512,8 +516,7 @@
                           "type": "object",
                           "properties": {
                             "slug": {
-                              "type": "string",
-                              "description": "Market slug within the group"
+                              "type": "string"
                             }
                           }
                         }
@@ -1553,6 +1556,313 @@
         ]
       }
     },
+    "/navigation": {
+      "get": {
+        "description": "Returns the hierarchical navigation structure for market pages",
+        "operationId": "MarketNavigationController_getNavigationTree",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Navigation tree retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NavigationNodeDto"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get navigation tree",
+        "tags": [
+          "Market Navigation"
+        ]
+      }
+    },
+    "/market-pages/by-path": {
+      "get": {
+        "description": "Resolves a URL path to a market page with its configuration, filters, and breadcrumb",
+        "operationId": "MarketNavigationController_byPath",
+        "parameters": [
+          {
+            "name": "path",
+            "required": true,
+            "in": "query",
+            "description": "URL path to resolve (e.g., \"/sports/football\")",
+            "schema": {
+              "example": "/sports/football",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Market page resolved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarketPageByPathResponseDto"
+                }
+              }
+            }
+          },
+          "301": {
+            "description": "Path has been redirected to a new location"
+          },
+          "400": {
+            "description": "Invalid or missing path",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Market page not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get market page by path",
+        "tags": [
+          "Market Navigation"
+        ]
+      }
+    },
+    "/market-pages/{id}/markets": {
+      "get": {
+        "description": "Returns paginated list of markets for a specific market page with filtering and sorting",
+        "operationId": "MarketNavigationController_listMarkets",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Market page ID",
+            "schema": {
+              "example": "123e4567-e89b-12d3-a456-426614174000",
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Cursor token for cursor-based pagination (cannot be used with page)",
+            "schema": {}
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "Sort field with optional - prefix for descending (e.g., -updatedAt, createdAt, deadline)",
+            "schema": {
+              "example": "-updatedAt"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Number of items per page (max 100)",
+            "schema": {
+              "example": 20
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number for offset pagination (cannot be used with cursor)",
+            "schema": {
+              "example": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Markets retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListMarketsResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters or pagination mode conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List markets for a page",
+        "tags": [
+          "Market Navigation"
+        ]
+      }
+    },
+    "/property-keys": {
+      "get": {
+        "description": "Returns all property keys with their options, sorted by slug",
+        "operationId": "MarketNavigationController_listPropertyKeys",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Property keys retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PropertyKeyResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List property keys",
+        "tags": [
+          "Market Navigation"
+        ]
+      }
+    },
+    "/property-keys/{id}": {
+      "get": {
+        "description": "Returns a specific property key with its options",
+        "operationId": "MarketNavigationController_getPropertyKey",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Property key ID",
+            "schema": {
+              "example": "123e4567-e89b-12d3-a456-426614174000",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Property key retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PropertyKeyResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Property key not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get property key by ID",
+        "tags": [
+          "Market Navigation"
+        ]
+      }
+    },
+    "/property-keys/{id}/options": {
+      "get": {
+        "description": "Returns options for a specific property key, optionally filtered by parent option",
+        "operationId": "MarketNavigationController_listPropertyOptions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Property key ID",
+            "schema": {
+              "example": "123e4567-e89b-12d3-a456-426614174000",
+              "type": "string"
+            }
+          },
+          {
+            "name": "parentId",
+            "required": false,
+            "in": "query",
+            "description": "Parent option ID for hierarchical filtering",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Property options retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PropertyOptionResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid property key ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List property options",
+        "tags": [
+          "Market Navigation"
+        ]
+      }
+    },
     "/orders": {
       "post": {
         "description": "Creates a buy/sell order for prediction market positions. Requires signed order data.",
@@ -1800,19 +2110,19 @@
         "type": "apiKey",
         "in": "header",
         "name": "X-API-Key",
-        "description": "API key for programmatic access. Generate at limitless.exchange → profile menu → Api keys. Starts with `lmts_`."
-      },
-      "limitless_session": {
-        "type": "apiKey",
-        "in": "cookie",
-        "name": "limitless_session",
-        "description": "Session cookie from /auth/login (deprecated — use API key instead)"
+        "description": "API key for programmatic access. Generate at limitless.exchange -> profile menu -> Api keys."
       },
       "bearer": {
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "JWT token for API access"
+        "description": "JWT token for API access (alternative to cookie auth)"
+      },
+      "limitless_session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "limitless_session",
+        "description": "Session authentication cookie obtained from /auth/login"
       }
     },
     "schemas": {
@@ -2755,6 +3065,370 @@
           "totalCount"
         ]
       },
+      "NavigationNodeDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the navigation node"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the navigation item"
+          },
+          "slug": {
+            "type": "string",
+            "description": "URL slug for the navigation item"
+          },
+          "path": {
+            "type": "string",
+            "description": "Full path to this navigation item",
+            "example": "/sports/football"
+          },
+          "icon": {
+            "type": "string",
+            "description": "Icon identifier for the navigation item"
+          },
+          "children": {
+            "description": "Child navigation nodes",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NavigationNodeDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "path",
+          "children"
+        ]
+      },
+      "ErrorResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Error message",
+            "example": "Invalid order data"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "FilterGroupOptionDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Display label for the option"
+          },
+          "value": {
+            "type": "string",
+            "description": "Value identifier for the option"
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Optional metadata for the option (color, icon)"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ]
+      },
+      "FilterGroupDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name of the filter group"
+          },
+          "slug": {
+            "type": "string",
+            "description": "URL slug for the filter group"
+          },
+          "allowMultiple": {
+            "type": "boolean",
+            "description": "Whether multiple options can be selected"
+          },
+          "presentation": {
+            "type": "string",
+            "description": "Presentation style for the filter group"
+          },
+          "options": {
+            "description": "Available filter options",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FilterGroupOptionDto"
+            }
+          }
+        }
+      },
+      "BreadcrumbItemDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name of the breadcrumb item"
+          },
+          "slug": {
+            "type": "string",
+            "description": "URL slug of the breadcrumb item"
+          },
+          "path": {
+            "type": "string",
+            "description": "Full path to this breadcrumb item"
+          }
+        },
+        "required": [
+          "name",
+          "slug",
+          "path"
+        ]
+      },
+      "MarketPageByPathResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier of the market page"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the market page"
+          },
+          "slug": {
+            "type": "string",
+            "description": "URL slug of the market page"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the market page",
+            "nullable": true
+          },
+          "fullPath": {
+            "type": "string",
+            "description": "Full URL path to this market page"
+          },
+          "baseFilter": {
+            "type": "object",
+            "description": "Base filter configuration for the page"
+          },
+          "filterGroups": {
+            "description": "Available filter groups for the page",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FilterGroupDto"
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Additional metadata for the page"
+          },
+          "breadcrumb": {
+            "description": "Breadcrumb trail to this page",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BreadcrumbItemDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "fullPath",
+          "baseFilter",
+          "filterGroups",
+          "metadata",
+          "breadcrumb"
+        ]
+      },
+      "CursorPaginationDto": {
+        "type": "object",
+        "properties": {
+          "nextCursor": {
+            "type": "string",
+            "description": "Cursor for the next page of results",
+            "nullable": true
+          }
+        }
+      },
+      "OffsetPaginationDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "Current page number"
+          },
+          "limit": {
+            "type": "number",
+            "description": "Number of items per page"
+          },
+          "total": {
+            "type": "number",
+            "description": "Total number of items"
+          },
+          "totalPages": {
+            "type": "number",
+            "description": "Total number of pages"
+          }
+        },
+        "required": [
+          "page",
+          "limit",
+          "total",
+          "totalPages"
+        ]
+      },
+      "ListMarketsResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "Array of market/group data",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cursor": {
+            "description": "Cursor pagination info (when using cursor parameter)",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CursorPaginationDto"
+              }
+            ]
+          },
+          "pagination": {
+            "description": "Offset pagination info (when using page parameter)",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OffsetPaginationDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "PropertyOptionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier of the property option"
+          },
+          "propertyKeyId": {
+            "type": "string",
+            "description": "Property key ID this option belongs to"
+          },
+          "value": {
+            "type": "string",
+            "description": "Value identifier for the option"
+          },
+          "label": {
+            "type": "string",
+            "description": "Display label for the option"
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Sort order for the option"
+          },
+          "parentOptionId": {
+            "type": "string",
+            "description": "Parent option ID for hierarchical options",
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Additional metadata for the option"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Creation timestamp"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Last update timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "propertyKeyId",
+          "value",
+          "label",
+          "sortOrder",
+          "metadata",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PropertyKeyResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier of the property key"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the property key"
+          },
+          "slug": {
+            "type": "string",
+            "description": "URL slug of the property key"
+          },
+          "type": {
+            "type": "string",
+            "description": "Type of property key",
+            "enum": [
+              "select",
+              "multi-select"
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Additional metadata for the property key"
+          },
+          "isSystem": {
+            "type": "boolean",
+            "description": "Whether this is a system-defined property key"
+          },
+          "options": {
+            "description": "Available options for this property key",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PropertyOptionResponseDto"
+            }
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Creation timestamp"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Last update timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "type",
+          "metadata",
+          "isSystem",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
       "Order": {
         "type": "object",
         "properties": {
@@ -2920,19 +3594,6 @@
         },
         "required": [
           "order"
-        ]
-      },
-      "ErrorResponseDto": {
-        "type": "object",
-        "properties": {
-          "message": {
-            "type": "string",
-            "description": "Error message",
-            "example": "Invalid order data"
-          }
-        },
-        "required": [
-          "message"
         ]
       },
       "CancelOrderResponseDto": {

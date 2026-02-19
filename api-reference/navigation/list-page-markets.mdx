@@ -1,0 +1,12 @@
+---
+title: "List Markets for a Page"
+openapi: "GET /market-pages/{id}/markets"
+---
+
+<Info>
+  The `id` parameter can be `__home__` to list all markets when Home is not explicitly configured.
+
+  Supports both **offset pagination** (`page` + `limit`) and **cursor pagination** (`cursor`). When `cursor` is present, offset pagination is ignored.
+
+  Sorting: prefix field with `-` for descending (e.g., `-updatedAt`). Allowed fields: `createdAt`, `updatedAt`, `deadline`, `id`.
+</Info>

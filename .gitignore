@@ -7,3 +7,5 @@ node_modules/
 limitless-sdk/
 limitless-exchange-ts-sdk/
 docs-reference/
+api-1.json
+*.dmg
