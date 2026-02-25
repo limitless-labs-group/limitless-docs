@@ -42,6 +42,7 @@
             "group": "Rewards & Fees",
             "pages": [
               "user-guide/lp-rewards",
+              "user-guide/maker-rebates",
               "user-guide/fees"
             ]
           },
