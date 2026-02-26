@@ -9,7 +9,8 @@ limitless-exchange-ts-sdk/
 docs-reference/
 api-1.json
 *.dmg
+*.pdf
 *.xml
 .DS_Store
-limitless-docs-audit.md
+limitless-docs-audit.mdn
 client_secret_*.json

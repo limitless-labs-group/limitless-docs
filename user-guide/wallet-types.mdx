@@ -1,0 +1,50 @@
+---
+title: "Wallet Types"
+description: "Overview of the three wallet types supported on Limitless Exchange"
+---
+
+Limitless supports three wallet types: **Externally Owned Accounts (EOA)**, **Embedded Wallets**, and **Smart Wallets**. Each type has different characteristics and tradeoffs for users.
+
+## Externally Owned Account (EOA)
+
+An **Externally Owned Account (EOA)** is a blockchain account controlled by a user via a private key. The private key is a secret value used to sign transactions. It must be kept secure and never shared.
+
+**Common EOA wallet interfaces:** [MetaMask](https://metamask.io/), [Rainbow](https://rainbow.me/en/), [Coinbase Wallet](https://www.coinbase.com/en-pt/wallet), [Rabby](https://rabby.io/), and similar browser extensions or mobile apps.
+
+**On Limitless:** Users connect an EOA from the main login menu. For every on-chain transaction, the user must approve it in their wallet interface (e.g., MetaMask).
+
+<Frame caption="EOA wallet connection options on Limitless">
+  <img src="/images/externally-owned-accounts.png" alt="Login screen showing MetaMask, Rabby Wallet, Coinbase Wallet, and other wallet options" />
+</Frame>
+
+## Embedded Wallet
+
+An **Embedded Wallet** is a non-custodial wallet created and operated within an application by a third-party provider, without a separate wallet app.
+
+**On Limitless:** When users sign in via social login (e.g., Google, Twitter), an embedded wallet is created automatically after authentication. Transactions can be executed directly from the app without an extra approval step in an external wallet.
+
+<Frame caption="Social login options for creating an embedded wallet">
+  <img src="/images/embedded-wallets.png" alt="Login screen showing email, Google, Discord, and Farcaster sign-in options" />
+</Frame>
+
+## Smart Wallet
+
+A **Smart Wallet** is an account implemented as a smart contract on-chain. It supports features such as:
+
+- Account recovery
+- Programmable logic for custom behavior
+- Gas fee abstraction and batched transactions
+
+**On Limitless:** Smart wallets are used primarily to remove the need for users to hold native tokens (e.g., ETH) to pay transaction fees. Users sign in via social login, and a smart wallet instance is created based on their embedded wallet. Transaction fees are sponsored by Limitless, while users only need to hold USDC or WETH for trading activity.
+
+<Frame caption="Smart wallets are created via social login">
+  <img src="/images/externally-owned-accounts.png" alt="Login screen showing wallet and social login options" />
+</Frame>
+
+## Summary
+
+| Wallet Type | Created When | Fee Responsibility | User Experience |
+| --- | --- | --- | --- |
+| **EOA** | External wallet connection | User pays gas in ETH | Requires approval per transaction in external wallet |
+| **Embedded** | Social login | User pays gas in ETH | In-app transactions; no external approval step |
+| **Smart** | Social login (from embedded wallet) | Platform sponsors gas | Users hold only USDC/WETH; no native token needed for fees |
