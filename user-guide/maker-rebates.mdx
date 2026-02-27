@@ -77,41 +77,37 @@ Assume **Hourly Crypto** markets are configured with a **20% rebate rate** (i.e.
 During one UTC day, the following trades execute in an eligible hourly market:
 
 | **Trade** | **Taker action** | **Price** | **Size** | **Executed value** | **Taker fee rate** | **Taker fee paid** | **Maker** |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Buy | &#36;0.60 | 1,000 | &#36;600 | 2.0% | &#36;12.00 | Maker A |
-| 2 | Sell | &#36;0.55 | 500 | &#36;275 | 2.0% | &#36;5.50 | Maker B |
-| 3 | Buy | &#36;0.65 | 800 | &#36;520 | 2.0% | &#36;10.40 | Maker A |
+| --------- | ---------------- | --------- | -------- | ------------------ | ------------------ | ------------------ | --------- |
+| 1         | Buy              | \$0.60    | 1,000    | \$600              | 2.0%               | \$12.00            | Maker A   |
+| 2         | Sell             | \$0.55    | 500      | \$275              | 2.0%               | \$5.50             | Maker B   |
+| 3         | Buy              | \$0.65    | 800      | \$520              | 2.0%               | \$10.40            | Maker A   |
 
 <Steps>
+  <Step title="Rebate credit is generated from executed fills">
+    Only executed maker fills generate rebate credit. Each trade contributes rebate credit based on the executed trade and the taker fee paid.
 
-<Step title="Rebate credit is generated from executed fills">
-  Only executed maker fills generate rebate credit. Each trade contributes rebate credit based on the executed trade and the taker fee paid.
+    - **Maker A rebate credit:** \$12.00 + \$10.40 = **\$22.40**
+    - **Maker B rebate credit:** **\$5.50**
+    - **Total rebate credit:** **\$27.90**
+  </Step>
+  <Step title="The market rebate pool is funded from taker fees">
+    Total eligible taker fees collected in this market for the day:
 
-  - **Maker A rebate credit:** &#36;12.00 + &#36;10.40 = **&#36;22.40**
-  - **Maker B rebate credit:** **&#36;5.50**
-  - **Total rebate credit:** **&#36;27.90**
-</Step>
+    \$12.00 + \$5.50 + \$10.40 = **\$27.90**
 
-<Step title="The market rebate pool is funded from taker fees">
-  Total eligible taker fees collected in this market for the day:
+    Hourly Crypto rebate rate = **20%**
 
-  &#36;12.00 + &#36;5.50 + &#36;10.40 = **&#36;27.90**
+    Daily rebate pool (this market) = 20% × \$27.90 = **\$5.58 USDC**
+  </Step>
+  <Step title="The rebate pool is distributed pro-rata">
+    Each maker receives a share of the rebate pool proportional to their share of the day's rebate credit:
 
-  Hourly Crypto rebate rate = **20%**
-
-  Daily rebate pool (this market) = 20% × &#36;27.90 = **&#36;5.58 USDC**
-</Step>
-
-<Step title="The rebate pool is distributed pro-rata">
-  Each maker receives a share of the rebate pool proportional to their share of the day's rebate credit:
-
-  - **Maker A share:** 22.40 / 27.90 = **80.29%** → **&#36;4.48 USDC**
-  - **Maker B share:** 5.50 / 27.90 = **19.71%** → **&#36;1.10 USDC**
-</Step>
-
+    - **Maker A share:** 22.40 / 27.90 = **80.29%** → **\$4.48 USDC**
+    - **Maker B share:** 5.50 / 27.90 = **19.71%** → **\$1.10 USDC**
+  </Step>
 </Steps>
 
-The market generated **&#36;27.90** in eligible taker fees, **&#36;5.58 USDC** was allocated to the rebate pool (20%), and that amount was split between makers based on their contribution to the day's eligible fee-generating fills.
+The market generated **\$27.90** in eligible taker fees, **\$5.58 USDC** was allocated to the rebate pool (20%), and that amount was split between makers based on their contribution to the day's eligible fee-generating fills.
 
 ## Eligibility
 
@@ -139,10 +135,9 @@ Eligibility may be configured by:
 
 ### Current program parameters
 
-| Market | Rebate rate |
-| --- | --- |
+| Market            | Rebate rate                |
+| ----------------- | -------------------------- |
 | **Hourly Crypto** | 20% of eligible taker fees |
-| **15-Min Crypto** | 20% of eligible taker fees |
 
 ## Funding and program economics
 
@@ -150,10 +145,10 @@ Maker Rebates is funded by taker fees and paid from a dedicated rebate wallet in
 
 The program is defined by three parameters:
 
-| Parameter | Description |
-| --- | --- |
-| **Rebate percentage** | What portion of taker fees is rebated |
-| **Eligible markets** | Which markets generate rebate credit |
+| Parameter               | Description                             |
+| ----------------------- | --------------------------------------- |
+| **Rebate percentage**   | What portion of taker fees is rebated   |
+| **Eligible markets**    | Which markets generate rebate credit    |
 | **Eligible categories** | Which categories generate rebate credit |
 
 These parameters determine where rebate credit is generated and how much is available for daily payouts.
