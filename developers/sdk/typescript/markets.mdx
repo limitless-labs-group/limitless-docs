@@ -74,10 +74,14 @@ interface Market {
   slug: string;
   title: string;
   venue: {
-    exchange: string;   // EIP-712 verifyingContract address
-    adapter: string;    // Adapter contract address
+    exchange: string;        // EIP-712 verifyingContract address
+    adapter: string | null;  // Adapter contract address (null for some CLOB markets)
   };
   positionIds: [string, string]; // [YES token ID, NO token ID]
+  openInterest?: string;
+  liquidity?: string;
+  imageUrl?: string | null;
+  automationType?: 'manual' | 'lumy' | 'sports';
   // ... additional fields
 }
 ```

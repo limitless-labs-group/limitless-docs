@@ -1,0 +1,253 @@
+---
+title: "Market Pages"
+description: "Navigate and filter markets with the TypeScript SDK"
+---
+
+## Overview
+
+The `MarketPageFetcher` class provides access to the Market Navigation API — a hierarchical system for browsing markets by category, applying dynamic filters, and paginating results. All endpoints are public and require no authentication.
+
+## Setup
+
+```typescript
+import { HttpClient, MarketPageFetcher } from '@limitless-exchange/sdk';
+
+const httpClient = new HttpClient({
+  baseURL: 'https://api.limitless.exchange',
+});
+
+const pageFetcher = new MarketPageFetcher(httpClient);
+```
+
+## Navigation Tree
+
+Fetch the full navigation hierarchy. Each node represents a browseable category with a URL path.
+
+```typescript
+const navigation = await pageFetcher.getNavigation();
+
+for (const node of navigation) {
+  console.log(`${node.name} → ${node.path}`);
+  for (const child of node.children) {
+    console.log(`  ${child.name} → ${child.path}`);
+  }
+}
+```
+
+### NavigationNode Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Unique identifier |
+| `name` | `string` | Display name |
+| `slug` | `string` | URL-friendly identifier |
+| `path` | `string` | Full URL path (e.g. `/crypto`) |
+| `icon` | `string \| undefined` | Optional icon name |
+| `children` | `NavigationNode[]` | Nested child nodes |
+
+## Resolving a Page by Path
+
+Convert a URL path into a `MarketPage` with its filters, metadata, and breadcrumb. The SDK handles 301 redirects internally.
+
+```typescript
+const page = await pageFetcher.getMarketPageByPath('/crypto');
+
+console.log(`Page: ${page.name}`);
+console.log(`Filters: ${page.filterGroups.length} groups`);
+console.log(`Breadcrumb: ${page.breadcrumb.map(b => b.name).join(' > ')}`);
+```
+
+### MarketPage Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Page identifier (used for `getMarkets()`) |
+| `name` | `string` | Display name |
+| `slug` | `string` | URL-friendly identifier |
+| `fullPath` | `string` | Full URL path |
+| `description` | `string \| undefined` | Page description |
+| `baseFilter` | `Record<string, any>` | Default filter applied to this page |
+| `filterGroups` | `FilterGroup[]` | Available filter groups |
+| `metadata` | `Record<string, unknown>` | Page metadata |
+| `breadcrumb` | `BreadcrumbItem[]` | Navigation breadcrumb |
+
+## Fetching Markets for a Page
+
+Use `getMarkets()` with the page ID to fetch markets. Supports offset and cursor pagination, sorting, and dynamic filters.
+
+### Offset Pagination
+
+```typescript
+const result = await pageFetcher.getMarkets(page.id, {
+  page: 1,
+  limit: 20,
+  sort: '-updatedAt',
+});
+
+for (const market of result.data) {
+  console.log(`${market.slug} — ${market.title}`);
+}
+
+if ('pagination' in result) {
+  console.log(`Page ${result.pagination.page} of ${result.pagination.totalPages}`);
+}
+```
+
+### Cursor Pagination
+
+```typescript
+const firstPage = await pageFetcher.getMarkets(page.id, {
+  cursor: '',
+  limit: 20,
+  sort: '-updatedAt',
+});
+
+for (const market of firstPage.data) {
+  console.log(market.slug);
+}
+
+if ('cursor' in firstPage && firstPage.cursor.nextCursor) {
+  const nextPage = await pageFetcher.getMarkets(page.id, {
+    cursor: firstPage.cursor.nextCursor,
+    limit: 20,
+  });
+}
+```
+
+<Warning>
+  You cannot use `cursor` and `page` in the same request. Choose one pagination strategy.
+</Warning>
+
+### Filtering
+
+Pass a `filters` object. Values can be a single primitive or an array for multi-select filters.
+
+```typescript
+// Single filter
+const result = await pageFetcher.getMarkets(page.id, {
+  filters: { ticker: 'btc' },
+});
+
+// Multiple values (OR logic)
+const result = await pageFetcher.getMarkets(page.id, {
+  filters: { ticker: ['btc', 'eth'] },
+});
+
+// Combined filters
+const result = await pageFetcher.getMarkets(page.id, {
+  limit: 10,
+  sort: '-updatedAt',
+  filters: {
+    ticker: ['btc', 'eth'],
+    duration: 'hourly',
+  },
+});
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | `number` | Page number (offset pagination) |
+| `limit` | `number` | Results per page |
+| `sort` | `string` | Sort field with optional `-` prefix for descending |
+| `cursor` | `string` | Cursor token (cursor pagination). Use `""` for the first request. |
+| `filters` | `Record<string, MarketPageFilterValue>` | Filter key-value pairs. Values can be primitives or arrays. |
+
+### Sort Options
+
+| Value | Description |
+|-------|-------------|
+| `createdAt` / `-createdAt` | Sort by creation date (ascending / descending) |
+| `updatedAt` / `-updatedAt` | Sort by last update |
+| `deadline` / `-deadline` | Sort by expiration deadline |
+| `id` / `-id` | Sort by market ID |
+
+## Property Keys
+
+Property keys define the available filter dimensions (e.g. "ticker", "duration"). Each key has a set of options.
+
+```typescript
+const keys = await pageFetcher.getPropertyKeys();
+
+for (const key of keys) {
+  console.log(`${key.name} (${key.type})`);
+  if (key.options) {
+    for (const opt of key.options.slice(0, 3)) {
+      console.log(`  ${opt.label}: ${opt.value}`);
+    }
+  }
+}
+```
+
+### Single Key and Options
+
+```typescript
+const key = await pageFetcher.getPropertyKey(keys[0].id);
+console.log(`${key.name} — ${key.options?.length ?? 0} options`);
+
+// Fetch options separately (supports parent filtering for hierarchical keys)
+const options = await pageFetcher.getPropertyOptions(key.id);
+
+// Child options filtered by parent
+const childOptions = await pageFetcher.getPropertyOptions(key.id, options[0]?.id);
+```
+
+### PropertyKey Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Unique identifier |
+| `name` | `string` | Display name |
+| `slug` | `string` | URL-friendly identifier |
+| `type` | `string` | `"select"` or `"multi-select"` |
+| `isSystem` | `boolean` | Whether this is a system-defined key |
+| `options` | `PropertyOption[] \| undefined` | Available options (when fetched inline) |
+| `metadata` | `Record<string, unknown>` | Key metadata |
+| `createdAt` | `string` | ISO 8601 creation timestamp |
+| `updatedAt` | `string` | ISO 8601 last update timestamp |
+
+## Complete Example
+
+```typescript
+import { HttpClient, MarketPageFetcher } from '@limitless-exchange/sdk';
+
+async function main() {
+  const httpClient = new HttpClient({
+    baseURL: 'https://api.limitless.exchange',
+  });
+  const pageFetcher = new MarketPageFetcher(httpClient);
+
+  // Browse the navigation tree
+  const navigation = await pageFetcher.getNavigation();
+  console.log(`Top-level categories: ${navigation.length}`);
+
+  // Resolve a page
+  const page = await pageFetcher.getMarketPageByPath('/crypto');
+  console.log(`\nPage: ${page.name}`);
+  console.log(`Available filters: ${page.filterGroups.map(fg => fg.name)}`);
+
+  // Fetch markets with filters
+  const result = await pageFetcher.getMarkets(page.id, {
+    limit: 5,
+    sort: '-updatedAt',
+    filters: { ticker: ['btc', 'eth'] },
+  });
+
+  for (const market of result.data) {
+    console.log(`  ${market.slug} — ${market.title}`);
+  }
+
+  // Explore property keys
+  const keys = await pageFetcher.getPropertyKeys();
+  for (const key of keys) {
+    console.log(`\n${key.name} (${key.type}):`);
+    const options = await pageFetcher.getPropertyOptions(key.id);
+    for (const opt of options.slice(0, 5)) {
+      console.log(`  ${opt.label}`);
+    }
+  }
+}
+
+main();
+```

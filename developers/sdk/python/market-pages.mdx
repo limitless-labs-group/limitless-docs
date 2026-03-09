@@ -1,0 +1,240 @@
+---
+title: "Market Pages"
+description: "Navigate and filter markets with the Python SDK"
+---
+
+## Overview
+
+The `MarketPageFetcher` class provides access to the Market Navigation API — a hierarchical system for browsing markets by category, applying dynamic filters, and paginating results. All endpoints are public and require no authentication.
+
+## Setup
+
+```python
+from limitless_sdk.api import HttpClient
+from limitless_sdk.market_pages import MarketPageFetcher
+
+http_client = HttpClient(base_url="https://api.limitless.exchange")
+page_fetcher = MarketPageFetcher(http_client)
+```
+
+## Navigation Tree
+
+Fetch the full navigation hierarchy. Each node represents a browseable category with a URL path.
+
+```python
+navigation = await page_fetcher.get_navigation()
+
+for node in navigation:
+    print(f"{node.name} → {node.path}")
+    for child in node.children:
+        print(f"  {child.name} → {child.path}")
+```
+
+### NavigationNode Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `str` | Unique identifier |
+| `name` | `str` | Display name |
+| `slug` | `str` | URL-friendly identifier |
+| `path` | `str` | Full URL path (e.g. `/crypto`) |
+| `icon` | `str \| None` | Optional icon name |
+| `children` | `list[NavigationNode]` | Nested child nodes |
+
+## Resolving a Page by Path
+
+Convert a URL path into a `MarketPage` with its filters, metadata, and breadcrumb. The SDK handles 301 redirects internally.
+
+```python
+page = await page_fetcher.get_market_page_by_path("/crypto")
+
+print(f"Page: {page.name}")
+print(f"Filters: {len(page.filter_groups)} groups")
+print(f"Breadcrumb: {' > '.join(b.name for b in page.breadcrumb)}")
+```
+
+### MarketPage Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `str` | Page identifier (used for `get_markets()`) |
+| `name` | `str` | Display name |
+| `slug` | `str` | URL-friendly identifier |
+| `full_path` | `str` | Full URL path |
+| `description` | `str \| None` | Page description |
+| `base_filter` | `dict` | Default filter applied to this page |
+| `filter_groups` | `list[FilterGroup]` | Available filter groups |
+| `metadata` | `dict` | Page metadata |
+| `breadcrumb` | `list[BreadcrumbItem]` | Navigation breadcrumb |
+
+## Fetching Markets for a Page
+
+Use `get_markets()` with the page ID to fetch markets. Supports offset and cursor pagination, sorting, and dynamic filters.
+
+### Offset Pagination
+
+```python
+result = await page_fetcher.get_markets(page.id, {
+    "page": 1,
+    "limit": 20,
+    "sort": "-updatedAt",
+})
+
+for market in result.data:
+    print(f"{market.slug} — {market.title}")
+
+print(f"Page {result.pagination.page} of {result.pagination.total_pages}")
+```
+
+### Cursor Pagination
+
+```python
+first_page = await page_fetcher.get_markets(page.id, {
+    "cursor": "",
+    "limit": 20,
+    "sort": "-updatedAt",
+})
+
+for market in first_page.data:
+    print(market.slug)
+
+if first_page.cursor.next_cursor:
+    next_page = await page_fetcher.get_markets(page.id, {
+        "cursor": first_page.cursor.next_cursor,
+        "limit": 20,
+    })
+```
+
+<Warning>
+  You cannot use `cursor` and `page` in the same request. Choose one pagination strategy.
+</Warning>
+
+### Filtering
+
+Pass a `filters` dictionary. Values can be a single string or a list for multi-select filters.
+
+```python
+# Single filter
+result = await page_fetcher.get_markets(page.id, {
+    "filters": {"ticker": "btc"},
+})
+
+# Multiple values (OR logic)
+result = await page_fetcher.get_markets(page.id, {
+    "filters": {"ticker": ["btc", "eth"]},
+})
+
+# Combined filters
+result = await page_fetcher.get_markets(page.id, {
+    "limit": 10,
+    "sort": "-updatedAt",
+    "filters": {
+        "ticker": ["btc", "eth"],
+        "duration": "hourly",
+    },
+})
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | `int` | Page number (offset pagination) |
+| `limit` | `int` | Results per page |
+| `sort` | `str` | Sort field with optional `-` prefix for descending |
+| `cursor` | `str` | Cursor token (cursor pagination). Use `""` for the first request. |
+| `filters` | `dict` | Filter key-value pairs. Values can be `str` or `list[str]`. |
+
+### Sort Options
+
+| Value | Description |
+|-------|-------------|
+| `createdAt` / `-createdAt` | Sort by creation date (ascending / descending) |
+| `updatedAt` / `-updatedAt` | Sort by last update |
+| `deadline` / `-deadline` | Sort by expiration deadline |
+| `id` / `-id` | Sort by market ID |
+
+## Property Keys
+
+Property keys define the available filter dimensions (e.g. "ticker", "duration"). Each key has a set of options.
+
+```python
+# List all property keys
+keys = await page_fetcher.get_property_keys()
+
+for key in keys:
+    print(f"{key.name} ({key.type})")
+    if key.options:
+        for opt in key.options[:3]:
+            print(f"  {opt.label}: {opt.value}")
+```
+
+### Single Key and Options
+
+```python
+key = await page_fetcher.get_property_key(keys[0].id)
+print(f"{key.name} — {len(key.options or [])} options")
+
+# Fetch options separately (supports parent filtering for hierarchical keys)
+options = await page_fetcher.get_property_options(key.id)
+
+# Child options filtered by parent
+child_options = await page_fetcher.get_property_options(key.id, parent_id=options[0].id)
+```
+
+### PropertyKey Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `str` | Unique identifier |
+| `name` | `str` | Display name |
+| `slug` | `str` | URL-friendly identifier |
+| `type` | `str` | `"select"` or `"multi-select"` |
+| `is_system` | `bool` | Whether this is a system-defined key |
+| `options` | `list[PropertyOption] \| None` | Available options (when fetched inline) |
+| `metadata` | `dict` | Key metadata |
+| `created_at` | `str` | ISO 8601 creation timestamp |
+| `updated_at` | `str` | ISO 8601 last update timestamp |
+
+## Complete Example
+
+```python
+import asyncio
+from limitless_sdk.api import HttpClient
+from limitless_sdk.market_pages import MarketPageFetcher
+
+async def main():
+    http_client = HttpClient(base_url="https://api.limitless.exchange")
+    page_fetcher = MarketPageFetcher(http_client)
+
+    # Browse the navigation tree
+    navigation = await page_fetcher.get_navigation()
+    print(f"Top-level categories: {len(navigation)}")
+
+    # Resolve a page
+    page = await page_fetcher.get_market_page_by_path("/crypto")
+    print(f"\nPage: {page.name}")
+    print(f"Available filters: {[fg.name for fg in page.filter_groups]}")
+
+    # Fetch markets with filters
+    result = await page_fetcher.get_markets(page.id, {
+        "limit": 5,
+        "sort": "-updatedAt",
+        "filters": {"ticker": ["btc", "eth"]},
+    })
+
+    for market in result.data:
+        print(f"  {market.slug} — {market.title}")
+
+    # Explore property keys
+    keys = await page_fetcher.get_property_keys()
+    for key in keys:
+        print(f"\n{key.name} ({key.type}):")
+        options = await page_fetcher.get_property_options(key.id)
+        for opt in options[:5]:
+            print(f"  {opt.label}")
+
+    await http_client.close()
+
+asyncio.run(main())
+```

@@ -86,6 +86,7 @@
             "pages": [
               "developers/sdk/typescript/getting-started",
               "developers/sdk/typescript/markets",
+              "developers/sdk/typescript/market-pages",
               "developers/sdk/typescript/orders",
               "developers/sdk/typescript/portfolio",
               "developers/sdk/typescript/websocket",
@@ -97,6 +98,7 @@
             "pages": [
               "developers/sdk/python/getting-started",
               "developers/sdk/python/markets",
+              "developers/sdk/python/market-pages",
               "developers/sdk/python/orders",
               "developers/sdk/python/portfolio",
               "developers/sdk/python/websocket",

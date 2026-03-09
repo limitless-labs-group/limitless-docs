@@ -67,6 +67,11 @@ The returned `Market` object is a Pydantic model with the following key fields:
 | `tokens.no` | `str` | Token ID for the NO outcome |
 | `venue.exchange` | `str` | Exchange contract address (used as EIP-712 `verifyingContract`) |
 | `venue.adapter` | `str` | Adapter contract address (used for NegRisk token approvals) |
+| `open_interest` | `str \| None` | Open interest value |
+| `liquidity` | `str \| None` | Liquidity value |
+| `image_url` | `str \| None` | Market image URL |
+| `automation_type` | `str \| None` | Market automation type (`"manual"`, `"lumy"`, or `"sports"`) |
+| `position_ids` | `list[str] \| None` | Position IDs (alternative to `tokens.yes` / `tokens.no`) |
 
 <Note>
   Token IDs are returned as **strings**. Pass them directly to `OrderClient.create_order()` as `token_id`.
