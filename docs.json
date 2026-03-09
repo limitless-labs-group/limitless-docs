@@ -127,7 +127,6 @@
             "pages": [
               "api-reference/auth/get-signing-message",
               "api-reference/auth/verify-auth",
-              "api-reference/auth/login",
               "api-reference/auth/logout",
               "api-reference/auth/create-api-key",
               "api-reference/auth/get-api-key",

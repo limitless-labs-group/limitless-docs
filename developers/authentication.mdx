@@ -8,7 +8,7 @@ description: "API key authentication for the Limitless Exchange API"
 All programmatic access to the Limitless Exchange API requires an **API key**.
 
 <Warning>
-  Cookie-based session authentication is **deprecated** and will be removed soon. Migrate to API keys immediately.
+  Cookie-based session authentication has been **removed**. Use API keys for all programmatic access.
 </Warning>
 
 ## Getting an API Key
@@ -45,19 +45,7 @@ curl -H "X-API-Key: lmts_your_key_here" https://api.limitless.exchange/markets
 | Method | Header | Status |
 |--------|--------|--------|
 | API Key | `X-API-Key: lmts_...` | **Required** for programmatic access |
-| Cookie Session | `Cookie: limitless_session=...` | **Deprecated** (removal imminent) |
 
-## Migration from Cookie to API Key
-
-```diff
-# Before (deprecated)
-- Cookie: limitless_session=your_session_token
-
-# After (recommended)
-+ X-API-Key: lmts_your_key_here
-```
-
-No more login flow or cookie handling needed.
 
 ## Checksummed Addresses
 
