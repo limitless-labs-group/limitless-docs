@@ -7,5 +7,4 @@ drafts/
 *.draft.mdx
 
 # Reference materials (not published as docs pages)
-limitless-sdk/
-limitless-exchange-ts-sdk/
+docs-reference/

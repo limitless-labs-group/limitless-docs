@@ -255,6 +255,140 @@
         ]
       }
     },
+    "/auth/api-keys": {
+      "post": {
+        "description": "Creates a new API key for programmatic access. Only available for users authenticated via the UI (Privy). Previous active keys are automatically revoked.",
+        "operationId": "ApiKeyController_createApiKey",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "API key created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "keyId": {
+                      "type": "string",
+                      "description": "Unique identifier for the API key",
+                      "example": "key_abc123def456"
+                    },
+                    "apiKey": {
+                      "type": "string",
+                      "description": "The API key value. Only shown once at creation time.",
+                      "example": "lmts_sk_1234567890abcdef..."
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When the key was created",
+                      "example": "2025-06-15T10:30:00Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key management is only available via the UI"
+          }
+        },
+        "security": [
+          {
+            "limitless_session": []
+          }
+        ],
+        "summary": "Create API key",
+        "tags": [
+          "Authentication"
+        ]
+      },
+      "get": {
+        "description": "Returns the currently active API key metadata for the authenticated user. Does not return the key value itself.",
+        "operationId": "ApiKeyController_getActiveKey",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Active API key metadata, or null if no active key exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "keyId": {
+                      "type": "string",
+                      "description": "Unique identifier for the API key",
+                      "example": "key_abc123def456"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "When the key was created",
+                      "example": "2025-06-15T10:30:00Z"
+                    },
+                    "lastUsedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true,
+                      "description": "When the key was last used",
+                      "example": "2025-06-16T08:00:00Z"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "limitless_session": []
+          }
+        ],
+        "summary": "Get active API key",
+        "tags": [
+          "Authentication"
+        ]
+      },
+      "delete": {
+        "description": "Revokes the currently active API key. The key will immediately stop working for authentication.",
+        "operationId": "ApiKeyController_revokeKey",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "API key revoked successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "API key revoked successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No active API key found"
+          },
+          "403": {
+            "description": "API key management is only available via the UI"
+          }
+        },
+        "security": [
+          {
+            "limitless_session": []
+          }
+        ],
+        "summary": "Revoke API key",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
     "/markets/active/{categoryId}": {
       "get": {
         "description": "Retrieves markets and groups that are active and not yet resolved, with optional category filtering",
@@ -587,6 +721,140 @@
           }
         },
         "summary": "Get Market Details",
+        "tags": [
+          "Markets"
+        ]
+      }
+    },
+    "/markets/{addressOrSlug}/oracle-candles": {
+      "get": {
+        "description": "Returns Chainlink candlestick data for markets configured with Chainlink Data Streams chart metadata. Useful for charting the underlying oracle price alongside prediction market prices.",
+        "operationId": "MarketController_getOracleCandles",
+        "parameters": [
+          {
+            "name": "addressOrSlug",
+            "required": true,
+            "in": "path",
+            "description": "Market address (0x...) or slug identifier",
+            "schema": {
+              "type": "string",
+              "example": "btc-above-100k-june"
+            }
+          },
+          {
+            "name": "interval",
+            "required": false,
+            "in": "query",
+            "description": "Candlestick interval",
+            "schema": {
+              "type": "string",
+              "enum": ["1m", "5m", "15m", "1h", "4h", "1d"],
+              "default": "1m"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Start timestamp in UNIX seconds. Defaults to market creation time minus 15 minutes.",
+            "schema": {
+              "type": "number",
+              "example": 1719792000
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "End timestamp in UNIX seconds. Defaults to now.",
+            "schema": {
+              "type": "number",
+              "example": 1719878400
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Candlestick data for the underlying oracle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "interval": {
+                      "type": "string",
+                      "description": "The requested candlestick interval",
+                      "example": "1h"
+                    },
+                    "source": {
+                      "type": "string",
+                      "description": "Data source identifier",
+                      "example": "chainlink"
+                    },
+                    "symbol": {
+                      "type": "string",
+                      "description": "The resolved Chainlink symbol",
+                      "example": "BTC/USD"
+                    },
+                    "timestampStart": {
+                      "type": "number",
+                      "description": "Start of the data range (UNIX seconds)",
+                      "example": 1719792000
+                    },
+                    "timestampEnd": {
+                      "type": "number",
+                      "description": "End of the data range (UNIX seconds)",
+                      "example": 1719878400
+                    },
+                    "rows": {
+                      "type": "array",
+                      "description": "Array of OHLCV candlestick rows",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "timestamp": {
+                            "type": "number",
+                            "description": "Candle open time (UNIX seconds)"
+                          },
+                          "open": {
+                            "type": "number",
+                            "description": "Opening price"
+                          },
+                          "high": {
+                            "type": "number",
+                            "description": "Highest price"
+                          },
+                          "low": {
+                            "type": "number",
+                            "description": "Lowest price"
+                          },
+                          "close": {
+                            "type": "number",
+                            "description": "Closing price"
+                          },
+                          "volume": {
+                            "type": "number",
+                            "description": "Trading volume"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid interval, time range, or market does not have Chainlink oracle configured"
+          },
+          "404": {
+            "description": "Market not found"
+          },
+          "502": {
+            "description": "Failed to fetch data from Chainlink"
+          }
+        },
+        "summary": "Get oracle candlesticks",
         "tags": [
           "Markets"
         ]
@@ -1913,6 +2181,50 @@
           }
         ],
         "summary": "Create Order",
+        "tags": [
+          "Trading"
+        ]
+      }
+    },
+    "/orders/status/batch": {
+      "post": {
+        "description": "Fetches historical order statuses for multiple orders by internal order IDs and/or client-provided order IDs. Returns execution details, settlement status, and maker match data for each order.",
+        "operationId": "OrderController_getOrderStatusBatch",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchOrderStatusRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Batch order statuses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchOrderStatusResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body"
+          },
+          "401": {
+            "description": "User not authenticated"
+          }
+        },
+        "security": [
+          {
+            "limitless_session": []
+          }
+        ],
+        "summary": "Get order statuses in batch",
         "tags": [
           "Trading"
         ]
@@ -3716,6 +4028,157 @@
         "required": [
           "message"
         ]
+      },
+      "BatchOrderStatusItemDto": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Internal order ID. Provide either orderId or clientOrderId, not both.",
+            "example": "4aa706dd-6c57-4f3c-945a-99818dfd95f1"
+          },
+          "clientOrderId": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Client-provided order ID. Provide either orderId or clientOrderId, not both.",
+            "example": "client-order-001"
+          }
+        }
+      },
+      "BatchOrderStatusRequestDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "List of status lookup queries (1-50 items)",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/BatchOrderStatusItemDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "OrderExecutionSummary": {
+        "type": "object",
+        "properties": {
+          "clientOrderId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Client-provided order ID if one was set"
+          },
+          "feeRateBps": {
+            "type": "number",
+            "description": "Fee rate in basis points",
+            "example": 0
+          },
+          "effectiveFeeBps": {
+            "type": "number",
+            "description": "Effective fee rate after rebates",
+            "example": 0
+          },
+          "matched": {
+            "type": "boolean",
+            "description": "Whether the order was matched with a counterparty"
+          },
+          "settlementStatus": {
+            "type": "string",
+            "description": "On-chain settlement status",
+            "enum": ["UNMATCHED", "PENDING", "MINED", "CONFIRMED", "FAILED"]
+          },
+          "tradeEventId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Trade event ID if matched"
+          },
+          "txHash": {
+            "type": "string",
+            "nullable": true,
+            "description": "Transaction hash on Base L2"
+          },
+          "totalsRaw": {
+            "type": "object",
+            "description": "Raw execution totals as strings (to preserve precision)",
+            "properties": {
+              "contractsGross": { "type": "string" },
+              "contractsFee": { "type": "string" },
+              "contractsNet": { "type": "string" },
+              "usdGross": { "type": "string" },
+              "usdFee": { "type": "string" },
+              "usdNet": { "type": "string" }
+            }
+          }
+        }
+      },
+      "BatchOrderStatusResultDto": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "number",
+            "description": "Index of this item in the request array",
+            "example": 0
+          },
+          "status": {
+            "type": "string",
+            "enum": ["found", "not_found", "invalid"],
+            "description": "Lookup result status",
+            "example": "found"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true,
+            "description": "Error message if status is 'invalid'",
+            "example": "Exactly one of orderId or clientOrderId is required"
+          },
+          "orderId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Resolved internal order ID"
+          },
+          "clientOrderId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Client-provided order ID"
+          },
+          "data": {
+            "type": "object",
+            "nullable": true,
+            "description": "Order data if found",
+            "properties": {
+              "order": {
+                "$ref": "#/components/schemas/OrderResponseDto"
+              },
+              "makerMatches": {
+                "type": "array",
+                "description": "Maker orders matched against this order",
+                "items": {
+                  "$ref": "#/components/schemas/MakerMatch"
+                }
+              },
+              "execution": {
+                "$ref": "#/components/schemas/OrderExecutionSummary"
+              }
+            }
+          }
+        },
+        "required": ["index", "status"]
+      },
+      "BatchOrderStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "description": "Array of status results corresponding to request items",
+            "items": {
+              "$ref": "#/components/schemas/BatchOrderStatusResultDto"
+            }
+          }
+        },
+        "required": ["results"]
       }
     }
   }

@@ -126,7 +126,10 @@
               "api-reference/auth/get-signing-message",
               "api-reference/auth/verify-auth",
               "api-reference/auth/login",
-              "api-reference/auth/logout"
+              "api-reference/auth/logout",
+              "api-reference/auth/create-api-key",
+              "api-reference/auth/get-api-key",
+              "api-reference/auth/revoke-api-key"
             ]
           },
           {
@@ -137,6 +140,7 @@
               "api-reference/markets/category-count",
               "api-reference/markets/active-slugs",
               "api-reference/markets/get-market",
+              "api-reference/markets/oracle-candles",
               "api-reference/markets/feed-events",
               "api-reference/markets/search"
             ]
@@ -145,6 +149,7 @@
             "group": "Trading",
             "pages": [
               "api-reference/trading/create-order",
+              "api-reference/trading/order-status-batch",
               "api-reference/trading/cancel-order",
               "api-reference/trading/cancel-batch",
               "api-reference/trading/cancel-all",
