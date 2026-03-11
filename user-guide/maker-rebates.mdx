@@ -72,9 +72,9 @@ Rebates are performance-based: the more eligible fee-generating maker fills you 
 
 ## Example
 
-Assume **Hourly Crypto** markets are configured with a **20% rebate rate** (i.e., 20% of eligible taker fees funds the rebate pool for that market).
+Assume **Hourly Crypto** and **15-minute Crypto** markets are configured with a **20% rebate rate** (i.e., 20% of eligible taker fees funds the rebate pool for those markets).
 
-During one UTC day, the following trades execute in an eligible hourly market:
+During one UTC day, the following trades execute in an eligible hourly or 15-minute market:
 
 | **Trade** | **Taker action** | **Price** | **Size** | **Executed value** | **Taker fee rate** | **Taker fee paid** | **Maker** |
 | --------- | ---------------- | --------- | -------- | ------------------ | ------------------ | ------------------ | --------- |
@@ -95,7 +95,7 @@ During one UTC day, the following trades execute in an eligible hourly market:
 
     \$12.00 + \$5.50 + \$10.40 = **\$27.90**
 
-    Hourly Crypto rebate rate = **20%**
+    Hourly / 15-minute Crypto rebate rate = **20%**
 
     Daily rebate pool (this market) = 20% × \$27.90 = **\$5.58 USDC**
   </Step>
@@ -135,9 +135,10 @@ Eligibility may be configured by:
 
 ### Current program parameters
 
-| Market            | Rebate rate                |
-| ----------------- | -------------------------- |
-| **Hourly Crypto** | 20% of eligible taker fees |
+| Market                      | Rebate rate                |
+| --------------------------- | -------------------------- |
+| **Hourly Crypto**           | 20% of eligible taker fees |
+| **15-minute Crypto markets** | 20% of eligible taker fees |
 
 ## Funding and program economics
 
