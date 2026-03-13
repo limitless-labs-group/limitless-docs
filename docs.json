@@ -67,6 +67,7 @@
             "group": "Getting Started",
             "pages": [
               "developers/introduction",
+              "developers/migrate-from-polymarket",
               "developers/authentication",
               "developers/venue-system",
               "developers/eip712-signing"

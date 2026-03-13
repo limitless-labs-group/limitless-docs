@@ -1,0 +1,412 @@
+---
+title: "Migrate from Polymarket"
+sidebarTitle: "From Polymarket"
+description: "Map Polymarket concepts, endpoints, and agent code to the Limitless API"
+---
+
+If you've built bots or agents on Polymarket, this guide maps every concept, endpoint, and code pattern to the Limitless equivalents so you can port your code in minutes.
+
+## What changed
+
+| | Polymarket | Limitless |
+|---|---|---|
+| **Chain** | Polygon (137) | Base (8453) |
+| **Collateral** | USDC.e | USDC (6 decimals) |
+| **REST hosts** | `gamma-api.polymarket.com` (data) + `clob.polymarket.com` (trading) | `api.limitless.exchange` (unified) |
+| **WebSocket** | `wss://ws-subscriptions-clob.polymarket.com` | `wss://ws.limitless.exchange` |
+| **Auth model** | L1/L2 — derive API creds with EIP-712, sign every request with HMAC | Single API key in `X-API-Key` header |
+| **SDKs** | `py-clob-client`, `@polymarket/clob-client`, `polymarket-client-sdk` (Rust) | [Python SDK](/developers/sdk/python/getting-started), [TypeScript SDK](/developers/sdk/typescript/getting-started), or direct REST |
+| **Wallet types** | EOA, Proxy, Gnosis Safe | EOA |
+| **Market lookup** | `condition_id` or `clobTokenIds` | `slug` or address |
+| **Token IDs** | `clobTokenIds[0]` = Yes, `[1]` = No | `positionIds[0]` = Yes, `[1]` = No |
+| **Order signing** | EIP-712 `verifyingContract` = CTF Exchange | EIP-712 `verifyingContract` = `venue.exchange` |
+| **Neg-risk** | Pass `negRisk` flag when creating orders | Handled via [venue system](/developers/venue-system) — extra approval to `venue.adapter` for SELL |
+
+## Authentication
+
+Polymarket requires deriving API credentials (apiKey, secret, passphrase) through an L1 EIP-712 handshake, then signing every request with HMAC-SHA256 across 5 `POLY_*` headers.
+
+Limitless uses a single API key generated in the UI.
+
+<Tabs>
+  <Tab title="Polymarket">
+    ```python
+    from py_clob_client.client import ClobClient
+
+    client = ClobClient(
+        "https://clob.polymarket.com",
+        key=private_key,
+        chain_id=137,
+    )
+    creds = client.create_or_derive_api_creds()
+
+    client = ClobClient(
+        "https://clob.polymarket.com",
+        key=private_key,
+        chain_id=137,
+        creds=creds,
+        signature_type=0,
+        funder=wallet_address,
+    )
+    ```
+  </Tab>
+  <Tab title="Limitless">
+    ```python
+    import requests
+
+    API_BASE = "https://api.limitless.exchange"
+    headers = {
+        "X-API-Key": "lmts_your_key_here",
+        "Content-Type": "application/json",
+    }
+    ```
+
+    Generate your key at [limitless.exchange](https://limitless.exchange) → profile → **Api keys**.
+  </Tab>
+</Tabs>
+
+No HMAC signing, no credential derivation, no `POLY_*` headers.
+
+## Endpoint mapping
+
+### Market data
+
+| Action | Polymarket | Limitless |
+|---|---|---|
+| List active markets | `GET gamma-api.polymarket.com/markets?active=true` | `GET /markets/active` |
+| Get market by slug | `GET gamma-api.polymarket.com/markets?slug=...` | `GET /markets/:slug` |
+| Search markets | `GET gamma-api.polymarket.com/markets?tag=...` | `GET /markets/search?query=...` |
+| Orderbook | `GET clob.polymarket.com/book?token_id=...` | `GET /markets/:slug/orderbook` |
+| Price history | `GET gamma-api.polymarket.com/markets/:id/prices-history` | `GET /markets/:slug/historical-price` |
+| Midpoint price | `GET clob.polymarket.com/midpoint?token_id=...` | Compute from orderbook response |
+
+### Trading
+
+| Action | Polymarket | Limitless |
+|---|---|---|
+| Place order | `POST clob.polymarket.com/order` | `POST /orders` |
+| Cancel order | `DELETE clob.polymarket.com/order/:id` | `DELETE /orders/:orderId` |
+| Cancel multiple | `DELETE clob.polymarket.com/cancel-orders` (up to 3000) | `POST /orders/cancel-batch` |
+| Cancel all | `DELETE clob.polymarket.com/cancel-all` | `DELETE /orders/all/:slug` |
+| Get open orders | `GET clob.polymarket.com/orders` | `GET /markets/:slug/user-orders` |
+| Get order by ID | `GET clob.polymarket.com/order/:id` | `POST /orders/status/batch` |
+
+### Portfolio
+
+| Action | Polymarket | Limitless |
+|---|---|---|
+| Get positions | `GET clob.polymarket.com/positions` | `GET /portfolio/positions` |
+| Get trades | `GET clob.polymarket.com/trades` | `GET /portfolio/trades` |
+| PnL chart | N/A | `GET /portfolio/pnl-chart` |
+| Trade history | `GET gamma-api.polymarket.com/activity` | `GET /portfolio/history` |
+
+## Fetch a market
+
+<Tabs>
+  <Tab title="Polymarket">
+    ```python
+    # Two separate APIs: Gamma for metadata, CLOB for trading
+    market = requests.get(
+        "https://gamma-api.polymarket.com/markets",
+        params={"slug": "will-trump-win"}
+    ).json()[0]
+
+    token_id = market["clobTokenIds"][0]   # Yes token
+    condition_id = market["conditionId"]
+    neg_risk = market["negRisk"]
+    tick_size = market["minimum_tick_size"]
+    ```
+  </Tab>
+  <Tab title="Limitless">
+    ```python
+    market = requests.get(
+        f"{API_BASE}/markets/will-trump-win",
+        headers=headers,
+    ).json()
+
+    token_id = market["positionIds"][0]   # Yes token
+    venue = market["venue"]               # exchange + adapter addresses
+    ```
+
+    No `conditionId`, `negRisk`, or `tickSize` needed in the order payload. The [venue system](/developers/venue-system) handles contract routing.
+  </Tab>
+</Tabs>
+
+## Build and sign an order
+
+The order structure is almost identical — both use EIP-712 typed data with the same field names. Key differences:
+
+| Field | Polymarket | Limitless |
+|---|---|---|
+| `chainId` | `137` (Polygon) | `8453` (Base) |
+| `verifyingContract` | CTF Exchange address | `venue.exchange` from market data |
+| `name` (EIP-712 domain) | `"Polymarket CTF Exchange"` | `"Limitless CTF Exchange"` |
+| `tokenId` source | `clobTokenIds[0\|1]` | `positionIds[0\|1]` |
+
+<Tabs>
+  <Tab title="Polymarket">
+    ```python
+    from py_clob_client.order_builder.constants import BUY
+
+    order = client.create_and_post_order(
+        OrderArgs(
+            token_id=token_id,
+            price=0.50,
+            size=10,
+            side=BUY,
+            order_type=OrderType.GTC,
+        ),
+        options={"tick_size": "0.01", "neg_risk": False},
+    )
+    ```
+  </Tab>
+  <Tab title="Limitless">
+    ```python
+    import time
+    from eth_account import Account
+    from eth_account.messages import encode_typed_data
+    from web3 import Web3
+
+    account = Account.from_key(private_key)
+    price, shares = 0.50, 10
+    maker_amount = int(price * shares * 1e6)
+    taker_amount = int(shares * 1e6)
+
+    order_data = {
+        "salt": int(time.time() * 1000),
+        "maker": Web3.to_checksum_address(account.address),
+        "signer": Web3.to_checksum_address(account.address),
+        "taker": "0x0000000000000000000000000000000000000000",
+        "tokenId": token_id,
+        "makerAmount": maker_amount,
+        "takerAmount": taker_amount,
+        "expiration": 0,
+        "nonce": 0,
+        "feeRateBps": 0,
+        "side": 0,          # 0=BUY, 1=SELL
+        "signatureType": 0,  # EOA
+    }
+
+    domain = {
+        "name": "Limitless CTF Exchange",
+        "version": "1",
+        "chainId": 8453,
+        "verifyingContract": Web3.to_checksum_address(venue["exchange"]),
+    }
+    types = {
+        "EIP712Domain": [
+            {"name": "name", "type": "string"},
+            {"name": "version", "type": "string"},
+            {"name": "chainId", "type": "uint256"},
+            {"name": "verifyingContract", "type": "address"},
+        ],
+        "Order": [
+            {"name": "salt", "type": "uint256"},
+            {"name": "maker", "type": "address"},
+            {"name": "signer", "type": "address"},
+            {"name": "taker", "type": "address"},
+            {"name": "tokenId", "type": "uint256"},
+            {"name": "makerAmount", "type": "uint256"},
+            {"name": "takerAmount", "type": "uint256"},
+            {"name": "expiration", "type": "uint256"},
+            {"name": "nonce", "type": "uint256"},
+            {"name": "feeRateBps", "type": "uint256"},
+            {"name": "side", "type": "uint8"},
+            {"name": "signatureType", "type": "uint8"},
+        ],
+    }
+    encoded = encode_typed_data({
+        "types": types,
+        "primaryType": "Order",
+        "domain": domain,
+        "message": order_data,
+    })
+    signed = Account.sign_message(encoded, private_key=private_key)
+    signature = signed.signature.hex()
+
+    resp = requests.post(f"{API_BASE}/orders", headers=headers, json={
+        "order": {**order_data, "signature": signature},
+        "ownerId": owner_id,
+        "orderType": "GTC",
+        "marketSlug": "will-trump-win",
+    })
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  `ownerId` is your Limitless profile ID — a required field on every `POST /orders` request. You can find it in the Limitless UI or from your first authenticated API response. Polymarket's SDK handles this internally; on Limitless you pass it explicitly.
+</Note>
+
+<Tip>
+  If you use the [Python SDK](/developers/sdk/python/getting-started) or [TypeScript SDK](/developers/sdk/typescript/getting-started), order building and signing are handled for you — similar to how `py-clob-client` works on Polymarket.
+</Tip>
+
+## Porting a Polymarket agent
+
+If you're adapting an agent built with the [Polymarket/agents](https://github.com/Polymarket/agents) framework, here's a checklist:
+
+<Steps>
+
+<Step title="Swap credentials">
+  Replace `POLYGON_WALLET_PRIVATE_KEY` with your existing private key on Base. Add `API_KEY` with your `lmts_` key. Remove any HMAC credential derivation code.
+</Step>
+
+<Step title="Update base URLs">
+  Replace both `gamma-api.polymarket.com` and `clob.polymarket.com` with `api.limitless.exchange`.
+</Step>
+
+<Step title="Change chain ID">
+  Update `chainId` from `137` to `8453` in all EIP-712 domain definitions.
+</Step>
+
+<Step title="Update EIP-712 domain name">
+  Change `"Polymarket CTF Exchange"` to `"Limitless CTF Exchange"`.
+</Step>
+
+<Step title="Swap token ID fields">
+  Replace `clobTokenIds` lookups with `positionIds`. The index convention is the same: `[0]` = Yes, `[1]` = No.
+</Step>
+
+<Step title="Use venue addresses">
+  Fetch `venue.exchange` from `GET /markets/:slug` and use it as `verifyingContract`. On Polymarket you may have hardcoded the CTF Exchange address — on Limitless each market can have its own venue.
+</Step>
+
+<Step title="Remove Polymarket-specific params">
+  Drop `tick_size`, `neg_risk`, `funder`, and `signature_type` from order construction. These are either not needed or handled by the venue system.
+</Step>
+
+<Step title="Add ownerId to order submissions">
+  `POST /orders` requires an `ownerId` field (your Limitless profile ID). Polymarket's SDK handles this internally; on Limitless you pass it explicitly in every order payload alongside `order`, `orderType`, and `marketSlug`.
+</Step>
+
+<Step title="Update approvals">
+  Approve USDC on Base (not Polygon) to `venue.exchange`. For NegRisk SELL orders, also approve Conditional Tokens to `venue.adapter`. See [venue system](/developers/venue-system).
+</Step>
+
+</Steps>
+
+## WebSocket
+
+| | Polymarket | Limitless |
+|---|---|---|
+| **URL** | `wss://ws-subscriptions-clob.polymarket.com/ws/...` | `wss://ws.limitless.exchange` |
+| **Namespace** | Channel-based (`market`, `user`) | Socket.IO namespace `/markets` |
+| **Auth** | API key in connection params | `X-API-Key` header during handshake |
+
+See [WebSocket events](/developers/websocket-events) for the full event reference.
+
+## Rate limits
+
+| | Polymarket | Limitless |
+|---|---|---|
+| Concurrent requests | Varies by builder tier | 2 |
+| Minimum delay | Varies | 300 ms between requests |
+
+## Quick reference for agents
+
+If you're building an LLM-powered agent or bot, here's the minimal flow:
+
+```python
+import os, time, requests
+from eth_account import Account
+from eth_account.messages import encode_typed_data
+from web3 import Web3
+
+API = "https://api.limitless.exchange"
+KEY = os.environ["API_KEY"]           # lmts_...
+PK  = os.environ["PRIVATE_KEY"]      # 0x...
+OWNER_ID = int(os.environ["OWNER_ID"])  # Profile ID from the Limitless UI
+H   = {"X-API-Key": KEY, "Content-Type": "application/json"}
+
+CHAIN_ID = 8453
+ZERO_ADDR = "0x0000000000000000000000000000000000000000"
+ORDER_TYPES = {
+    "EIP712Domain": [
+        {"name": "name", "type": "string"},
+        {"name": "version", "type": "string"},
+        {"name": "chainId", "type": "uint256"},
+        {"name": "verifyingContract", "type": "address"},
+    ],
+    "Order": [
+        {"name": "salt", "type": "uint256"},
+        {"name": "maker", "type": "address"},
+        {"name": "signer", "type": "address"},
+        {"name": "taker", "type": "address"},
+        {"name": "tokenId", "type": "uint256"},
+        {"name": "makerAmount", "type": "uint256"},
+        {"name": "takerAmount", "type": "uint256"},
+        {"name": "expiration", "type": "uint256"},
+        {"name": "nonce", "type": "uint256"},
+        {"name": "feeRateBps", "type": "uint256"},
+        {"name": "side", "type": "uint8"},
+        {"name": "signatureType", "type": "uint8"},
+    ],
+}
+
+# 1. Find a market
+markets = requests.get(f"{API}/markets/active", headers=H).json()
+slug = markets[0]["slug"]
+
+# 2. Get venue + token IDs (cache per market — these are static)
+market = requests.get(f"{API}/markets/{slug}", headers=H).json()
+venue_exchange = market["venue"]["exchange"]
+yes_token = market["positionIds"][0]
+
+# 3. Build order (BUY 10 YES shares at $0.50)
+acct = Account.from_key(PK)
+order = {
+    "salt": int(time.time() * 1000),
+    "maker": Web3.to_checksum_address(acct.address),
+    "signer": Web3.to_checksum_address(acct.address),
+    "taker": ZERO_ADDR,
+    "tokenId": yes_token,
+    "makerAmount": 5_000_000,   # 0.50 * 10 * 1e6
+    "takerAmount": 10_000_000,  # 10 * 1e6
+    "expiration": 0,
+    "nonce": 0,
+    "feeRateBps": 0,
+    "side": 0,
+    "signatureType": 0,
+}
+
+# 4. Sign (EIP-712) — same encode_typed_data pattern as Polymarket CTF
+encoded = encode_typed_data({
+    "types": ORDER_TYPES,
+    "primaryType": "Order",
+    "domain": {
+        "name": "Limitless CTF Exchange",
+        "version": "1",
+        "chainId": CHAIN_ID,
+        "verifyingContract": Web3.to_checksum_address(venue_exchange),
+    },
+    "message": order,
+})
+sig = Account.sign_message(encoded, private_key=PK).signature.hex()
+
+# 5. Submit
+resp = requests.post(f"{API}/orders", headers=H, json={
+    "order": {**order, "signature": sig},
+    "ownerId": OWNER_ID,
+    "orderType": "GTC",
+    "marketSlug": slug,
+})
+print(resp.json())
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Python quick start" icon="python" href="/developers/quickstart/python">
+    Full end-to-end walkthrough with error handling.
+  </Card>
+  <Card title="Venue system" icon="building" href="/developers/venue-system">
+    How venue contracts and token approvals work.
+  </Card>
+  <Card title="API reference" icon="book" href="/api-reference/introduction">
+    Complete endpoint documentation.
+  </Card>
+  <Card title="EIP-712 signing" icon="pen" href="/developers/eip712-signing">
+    Full order type definition and field reference.
+  </Card>
+</CardGroup>
