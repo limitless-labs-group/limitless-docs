@@ -1457,7 +1457,7 @@
     },
     "/portfolio/{account}/traded-volume": {
       "get": {
-        "description": "Get total traded volume and statistics for a specific user",
+        "description": "Get total traded volume for a specific user. Returns combined CLOB and AMM volume (both taker and maker sides) in whole USDC. This is the all-time cumulative trading volume, not the current portfolio value.",
         "operationId": "PublicPortfolioController_tradedVolume",
         "parameters": [
           {
@@ -1473,12 +1473,18 @@
         ],
         "responses": {
           "200": {
-            "description": "User trading volume statistics",
+            "description": "User trading volume",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": true
+                  "properties": {
+                    "data": {
+                      "type": "string",
+                      "description": "Total traded volume in whole USDC (no decimal divisor needed). Includes both taker and maker volume across CLOB and AMM trades.",
+                      "example": "9702853"
+                    }
+                  }
                 }
               }
             }
@@ -2244,6 +2250,54 @@
           "Trading"
         ]
       }
+    },
+    "/profiles/{account}": {
+      "get": {
+        "description": "Retrieve the authenticated user's profile, including their internal user ID and fee rate. This is useful for API users who need their `feeRateBps` (for order signing) or numeric `id` (used as `ownerId` in other flows). You can only access your own profile — requesting another user's address returns 403.",
+        "operationId": "ProfileController_findOne",
+        "parameters": [
+          {
+            "name": "account",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Your wallet address (the address associated with your API key)",
+            "example": "0x27b4afBD88fE7c88c6897BB0b4ADE338D0401E37"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile with fee rate and rank information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — missing or invalid API key"
+          },
+          "403": {
+            "description": "Forbidden — cannot access another user's private profile. Use the public profile endpoint instead."
+          },
+          "404": {
+            "description": "Profile not found for the given address"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "summary": "Get your profile",
+        "tags": [
+          "Portfolio"
+        ]
+      }
     }
   },
   "components": {
@@ -2262,6 +2316,176 @@
       }
     },
     "schemas": {
+      "ProfileResponse": {
+        "type": "object",
+        "description": "User profile including trading rank and fee rate",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Internal user ID (used as ownerId in other API flows)",
+            "example": 42
+          },
+          "account": {
+            "type": "string",
+            "description": "Ethereum wallet address",
+            "example": "0x27b4afBD88fE7c88c6897BB0b4ADE338D0401E37"
+          },
+          "username": {
+            "type": "string",
+            "description": "Unique username",
+            "example": "trader123"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Display name shown in the UI",
+            "example": "Trader 123"
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true,
+            "description": "User biography"
+          },
+          "client": {
+            "type": "string",
+            "description": "Client type used during registration",
+            "example": "eoa"
+          },
+          "pfpUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "Profile picture URL"
+          },
+          "smartWallet": {
+            "type": "string",
+            "nullable": true,
+            "description": "Smart wallet address, if configured"
+          },
+          "isCreator": {
+            "type": "boolean",
+            "description": "Whether the user is a market creator"
+          },
+          "isOnboarded": {
+            "type": "boolean",
+            "description": "Whether the user has completed onboarding"
+          },
+          "socialUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "URL to the user's social media profile"
+          },
+          "hasTraded": {
+            "type": "boolean",
+            "description": "Whether the user has executed at least one trade"
+          },
+          "tradeWalletOption": {
+            "type": "string",
+            "nullable": true,
+            "enum": ["eoa", "smartWallet"],
+            "description": "Which wallet is used for trading"
+          },
+          "tradeWalletChoosen": {
+            "type": "boolean",
+            "description": "Whether the user has selected a trade wallet"
+          },
+          "embeddedAccount": {
+            "type": "string",
+            "nullable": true,
+            "description": "Embedded wallet address (Privy)"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["simple", "advanced"],
+            "description": "Trading UI mode"
+          },
+          "referralCode": {
+            "type": "string",
+            "nullable": true,
+            "description": "User's referral code"
+          },
+          "points": {
+            "type": "number",
+            "description": "Current points balance",
+            "example": 15000
+          },
+          "accumulativePoints": {
+            "type": "number",
+            "description": "Total accumulated points (all-time)",
+            "example": 50000
+          },
+          "rank": {
+            "type": "object",
+            "description": "User's trading rank, which determines the fee rate applied to orders",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "description": "Rank ID"
+              },
+              "name": {
+                "type": "string",
+                "enum": ["Bronze", "Silver", "Gold", "Platinum", "Diamond"],
+                "description": "Rank tier name",
+                "example": "Gold"
+              },
+              "feeRateBps": {
+                "type": "integer",
+                "description": "Fee rate in basis points applied to this user's orders. Use this value when constructing signed orders.",
+                "example": 200
+              }
+            }
+          },
+          "referralData": {
+            "type": "array",
+            "description": "Users referred by this user",
+            "items": {
+              "type": "object",
+              "properties": {
+                "createdAt": {
+                  "type": "string",
+                  "description": "When the referral was created"
+                },
+                "id": {
+                  "type": "integer",
+                  "description": "Referral record ID"
+                },
+                "referredProfileId": {
+                  "type": "integer",
+                  "description": "Profile ID of the referred user"
+                },
+                "pfpUrl": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "Profile picture of the referred user"
+                },
+                "displayName": {
+                  "type": "string",
+                  "description": "Display name of the referred user"
+                }
+              }
+            }
+          },
+          "referredUsersCount": {
+            "type": "integer",
+            "description": "Number of users referred"
+          },
+          "enrolledInPointsProgram": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether the user is enrolled in the points program"
+          },
+          "leaderboardPosition": {
+            "type": "integer",
+            "description": "Position on the leaderboard"
+          },
+          "isTop100": {
+            "type": "boolean",
+            "description": "Whether the user is in the top 100 on the leaderboard"
+          },
+          "isCaptain": {
+            "type": "boolean",
+            "description": "Whether the user is a competition team captain"
+          }
+        }
+      },
       "CreateUserDto": {
         "type": "object",
         "properties": {

@@ -163,6 +163,7 @@
           {
             "group": "Portfolio",
             "pages": [
+              "api-reference/portfolio/get-profile",
               "api-reference/portfolio/trades",
               "api-reference/portfolio/positions",
               "api-reference/portfolio/pnl-chart",
