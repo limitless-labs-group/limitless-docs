@@ -1,14 +1,14 @@
 ---
 title: "Authentication"
-description: "API key authentication for the Limitless Exchange API"
+description: "API key and scoped token authentication for the Limitless Exchange API"
 ---
 
 ## API Key Authentication
 
-All programmatic access to the Limitless Exchange API requires an **API key**.
+All programmatic access to the Limitless Exchange API requires authentication. The simplest method is an **API key**.
 
 <Warning>
-  Cookie-based session authentication has been **removed**. Use API keys for all programmatic access.
+  Cookie-based session authentication has been **removed**. Use API keys or scoped API tokens for all programmatic access.
 </Warning>
 
 ## Getting an API Key
@@ -42,10 +42,114 @@ curl -H "X-API-Key: lmts_your_key_here" https://api.limitless.exchange/markets
 
 ## Authentication Methods
 
-| Method | Header | Status |
-|--------|--------|--------|
-| API Key | `X-API-Key: lmts_...` | **Required** for programmatic access |
+| Method | Headers | Use Case |
+|--------|---------|----------|
+| API Key | `X-API-Key: lmts_...` | Individual traders, bots, data access |
+| Scoped API Token (HMAC) | `lmts-api-key`, `lmts-timestamp`, `lmts-signature` | Partners, delegated signing, sub-account management |
 
+## Scoped API Tokens (HMAC)
+
+For partners and advanced integrations, Limitless supports **scoped API tokens** with HMAC-SHA256 request signing. These tokens provide fine-grained access control through scopes.
+
+### Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `trading` | Place and cancel orders. Required base scope for `delegated_signing`. |
+| `account_creation` | Create sub-account profiles under your partner account. |
+| `delegated_signing` | Server signs orders on behalf of sub-accounts (requires `trading` scope). Enables Web2 partners to submit orders without end users managing private keys. |
+
+### HMAC Request Signing
+
+Every request is signed with HMAC-SHA256. The server verifies the signature using the token's secret.
+
+**Required headers:**
+
+| Header | Description |
+|--------|-------------|
+| `lmts-api-key` | Your token ID (received at token creation) |
+| `lmts-timestamp` | ISO-8601 timestamp (must be within 30 seconds of server time) |
+| `lmts-signature` | Base64-encoded HMAC-SHA256 signature |
+
+**Canonical message format:**
+
+```
+{ISO-8601 timestamp}\n{HTTP METHOD}\n{request path}\n{request body}
+```
+
+**Example (TypeScript):**
+
+```typescript
+import { createHmac } from 'crypto';
+
+function signRequest(
+  tokenId: string,
+  secret: string,     // base64-encoded, received at token creation
+  method: string,
+  path: string,
+  body: string = '',
+): Record<string, string> {
+  const timestamp = new Date().toISOString();
+  const message = `${timestamp}\n${method}\n${path}\n${body}`;
+
+  const signature = createHmac('sha256', Buffer.from(secret, 'base64'))
+    .update(message)
+    .digest('base64');
+
+  return {
+    'lmts-api-key': tokenId,
+    'lmts-timestamp': timestamp,
+    'lmts-signature': signature,
+  };
+}
+
+// Usage
+const headers = signRequest(tokenId, secret, 'POST', '/orders', JSON.stringify(orderPayload));
+const res = await fetch('https://api.limitless.exchange/orders', {
+  method: 'POST',
+  headers: { ...headers, 'Content-Type': 'application/json' },
+  body: JSON.stringify(orderPayload),
+});
+```
+
+**Example (Python):**
+
+```python
+import hmac, hashlib, base64
+from datetime import datetime, timezone
+
+def sign_request(token_id: str, secret: str, method: str, path: str, body: str = "") -> dict:
+    timestamp = datetime.now(timezone.utc).isoformat()
+    message = f"{timestamp}\n{method}\n{path}\n{body}"
+
+    signature = base64.b64encode(
+        hmac.new(
+            base64.b64decode(secret),
+            message.encode("utf-8"),
+            hashlib.sha256,
+        ).digest()
+    ).decode("utf-8")
+
+    return {
+        "lmts-api-key": token_id,
+        "lmts-timestamp": timestamp,
+        "lmts-signature": signature,
+    }
+```
+
+### Getting a Scoped API Token
+
+Scoped API tokens require a partner setup. Contact [hey@limitless.network](mailto:hey@limitless.network) to get started. Once enabled, you can derive tokens via `POST /auth/api-tokens/derive` while authenticated with Privy.
+
+<Note>
+  The token secret is returned **once** at creation time. Store it securely — it cannot be retrieved again.
+</Note>
+
+### Delegated Signing
+
+With the `delegated_signing` scope, partners can submit orders **without** providing `signature` and `signatureType` in the order payload. The server signs the order using a Privy server wallet linked to the target sub-account.
+
+Use the `onBehalfOf` field in the order payload to specify which sub-account the order is for. The target profile must be linked to your partner account.
 
 ## Checksummed Addresses
 
@@ -57,5 +161,5 @@ All Ethereum addresses in API requests must use **checksummed format** (EIP-55 m
 **Example:** `0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed`
 
 <Note>
-  Your private key is still required for **EIP-712 order signing**, but the API key handles request authentication.
+  Your private key is still required for **EIP-712 order signing** (unless using delegated signing), but the API key or scoped token handles request authentication.
 </Note>

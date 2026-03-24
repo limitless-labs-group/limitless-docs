@@ -2308,6 +2308,12 @@
         "name": "X-API-Key",
         "description": "API key for programmatic access. Generate at limitless.exchange -> profile menu -> Api keys."
       },
+      "HmacAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "lmts-api-key",
+        "description": "Scoped API token with HMAC-SHA256 signing. Requires three headers: lmts-api-key (token ID), lmts-timestamp (ISO-8601), lmts-signature (Base64-encoded HMAC). See Authentication docs for details."
+      },
       "bearer": {
         "type": "http",
         "scheme": "bearer",
@@ -3863,12 +3869,12 @@
           },
           "signature": {
             "type": "string",
-            "description": "EIP-712 signature of order details",
+            "description": "EIP-712 signature of order details. Optional when using delegated signing.",
             "example": "0x123abc456def789ghi0123abc456def789ghi0123abc456def789ghi0123456789012345678901"
           },
           "signatureType": {
             "type": "number",
-            "description": "Signature type (0-3)",
+            "description": "Signature type (0-3). Optional when using delegated signing.",
             "enum": [
               0,
               1,
@@ -3886,9 +3892,7 @@
           "makerAmount",
           "takerAmount",
           "feeRateBps",
-          "side",
-          "signature",
-          "signatureType"
+          "side"
         ]
       },
       "CreateOrderDto": {
@@ -3920,6 +3924,17 @@
             "type": "string",
             "description": "Market identifier slug",
             "example": "biden-vs-trump-2024"
+          },
+          "clientOrderId": {
+            "type": "string",
+            "description": "Client-provided idempotency key for order placement. If a duplicate is submitted, the server returns 409 Conflict.",
+            "example": "client-order-001",
+            "maxLength": 128
+          },
+          "onBehalfOf": {
+            "type": "number",
+            "description": "Profile ID to place order on behalf of (partner flow). Requires an API token with trading scope and a partner relationship with the target profile.",
+            "example": 12345
           }
         },
         "required": [
@@ -3933,11 +3948,71 @@
         "type": "object",
         "properties": {}
       },
+      "OrderExecutionTotalsRawDto": {
+        "type": "object",
+        "description": "Raw execution totals in contract units (strings to preserve precision)",
+        "properties": {
+          "contractsGross": { "type": "string", "example": "1000000" },
+          "contractsFee": { "type": "string", "example": "1000" },
+          "contractsNet": { "type": "string", "example": "999000" },
+          "usdGross": { "type": "string", "example": "500000" },
+          "usdFee": { "type": "string", "example": "500" },
+          "usdNet": { "type": "string", "example": "499500" }
+        },
+        "required": ["contractsGross", "contractsFee", "contractsNet", "usdGross", "usdFee", "usdNet"]
+      },
+      "OrderExecutionDto": {
+        "type": "object",
+        "description": "Execution and settlement summary for a created order",
+        "properties": {
+          "matched": {
+            "type": "boolean",
+            "description": "Whether the order was matched immediately",
+            "example": true
+          },
+          "settlementStatus": {
+            "type": "string",
+            "description": "Current settlement status of the order",
+            "enum": ["UNMATCHED", "MATCHED", "MINED", "CONFIRMED", "RETRYING", "FAILED"],
+            "example": "MINED"
+          },
+          "tradeEventId": {
+            "type": "string",
+            "description": "Trade event ID (present when matched)",
+            "example": "4aa706dd-6c57-4f3c-945a-99818dfd95f1"
+          },
+          "txHash": {
+            "type": "string",
+            "description": "On-chain transaction hash (present when mined)",
+            "example": "0xabc123",
+            "nullable": true
+          },
+          "clientOrderId": {
+            "type": "string",
+            "description": "Echo of client-provided idempotency key",
+            "example": "client-order-001"
+          },
+          "feeRateBps": {
+            "type": "number",
+            "description": "Fee rate in basis points applied to this order",
+            "example": 25
+          },
+          "effectiveFeeBps": {
+            "type": "number",
+            "description": "Effective fee rate in basis points after any rebates",
+            "example": 26
+          },
+          "totalsRaw": {
+            "$ref": "#/components/schemas/OrderExecutionTotalsRawDto"
+          }
+        },
+        "required": ["matched", "settlementStatus", "feeRateBps", "effectiveFeeBps", "totalsRaw"]
+      },
       "OrderResponseDto": {
         "type": "object",
         "properties": {
           "order": {
-            "description": "Order details",
+            "description": "Order details including slim market and owner",
             "allOf": [
               {
                 "$ref": "#/components/schemas/Order"
@@ -3950,10 +4025,15 @@
             "items": {
               "$ref": "#/components/schemas/MakerMatch"
             }
+          },
+          "execution": {
+            "description": "Execution and settlement summary",
+            "$ref": "#/components/schemas/OrderExecutionDto"
           }
         },
         "required": [
-          "order"
+          "order",
+          "execution"
         ]
       },
       "CancelOrderResponseDto": {

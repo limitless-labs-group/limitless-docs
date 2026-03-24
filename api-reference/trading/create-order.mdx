@@ -9,3 +9,28 @@ openapi: "POST /orders"
   2. Sign the order using [EIP-712](/developers/eip712-signing) with `venue.exchange` as `verifyingContract`
   3. Ensure you have [token approvals](/developers/venue-system#required-token-approvals) set up
 </Info>
+
+### Optional Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `clientOrderId` | `string` | Idempotency key (max 128 chars). If a duplicate is submitted, the server returns `409 Conflict`. |
+| `onBehalfOf` | `number` | Profile ID to place order on behalf of. Requires a [scoped API token](/developers/authentication#scoped-api-tokens-hmac) with `trading` scope and a partner relationship with the target profile. |
+
+### Delegated Signing
+
+Partners with the `delegated_signing` scope can omit `signature` and `signatureType` from the order object. The server signs the order using a Privy server wallet linked to the target account. See [Authentication](/developers/authentication#delegated-signing) for details.
+
+### Execution Response
+
+The response includes an `execution` object with settlement details:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `matched` | `boolean` | Whether the order was matched immediately |
+| `settlementStatus` | `string` | `UNMATCHED`, `MATCHED`, `MINED`, `CONFIRMED`, `RETRYING`, or `FAILED` |
+| `tradeEventId` | `string` | Trade event ID (present when matched) |
+| `txHash` | `string` | On-chain transaction hash (present when mined) |
+| `feeRateBps` | `number` | Fee rate in basis points |
+| `effectiveFeeBps` | `number` | Effective fee rate after rebates |
+| `totalsRaw` | `object` | Raw execution totals (`contractsGross`, `contractsFee`, `contractsNet`, `usdGross`, `usdFee`, `usdNet`) |
