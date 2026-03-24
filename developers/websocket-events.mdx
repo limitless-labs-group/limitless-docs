@@ -18,9 +18,9 @@ const socket = io('wss://ws.limitless.exchange/markets', {
 });
 ```
 
-## Subscribing
+## Subscribing to Market Data
 
-Subscribe to markets by emitting `subscribe_market_prices`:
+Subscribe to price and orderbook updates by emitting `subscribe_market_prices`:
 
 ```typescript
 // AMM price updates
@@ -43,6 +43,53 @@ socket.emit('subscribe_market_prices', {
 <Warning>
   Subscriptions **replace** previous ones. If you want both AMM prices and CLOB orderbook, send both `marketAddresses` and `marketSlugs` together in a single call.
 </Warning>
+
+## Subscribing to Position Updates
+
+Subscribe to real-time position changes by emitting `subscribe_positions`. This requires authentication via the `X-API-Key` header.
+
+`subscribe_positions` accepts the same payload as `subscribe_market_prices`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `marketAddresses` | `string[]` | Contract addresses for AMM markets |
+| `marketSlugs` | `string[]` | Slugs for CLOB markets |
+
+```typescript
+import { io } from 'socket.io-client';
+
+const socket = io('wss://ws.limitless.exchange/markets', {
+  transports: ['websocket'],
+  extraHeaders: { 'X-API-Key': 'lmts_your_key_here' },
+});
+
+socket.on('connect', () => {
+  // Subscribe to position updates for specific markets
+  socket.emit('subscribe_positions', {
+    marketAddresses: ['0x1234...'],   // AMM markets
+    marketSlugs: ['btc-100k-weekly'], // CLOB markets
+  });
+});
+
+// Confirmation
+socket.on('system', (data) => {
+  console.log(data);
+  // { message: 'Successfully subscribed to position updates', markets: { addresses: [...], slugs: [...] } }
+});
+
+// Position updates
+socket.on('positions', (data) => {
+  console.log('Position update:', data);
+});
+```
+
+<Warning>
+  Like `subscribe_market_prices`, calling `subscribe_positions` again **replaces** the previous subscription. Include all markets in a single call.
+</Warning>
+
+<Note>
+  Position updates are pushed automatically when your balances change (e.g. after a trade is mined). You do not need to poll.
+</Note>
 
 ## Event Reference
 
@@ -87,6 +134,10 @@ socket.emit('subscribe_market_prices', {
 
 ### `positions`
 
+Position updates have different shapes depending on market type.
+
+**AMM markets:**
+
 ```json
 {
   "account": "0xabcd...",
@@ -95,9 +146,31 @@ socket.emit('subscribe_market_prices', {
     {
       "tokenId": "123456",
       "balance": "1000000",
-      "outcomeIndex": 0
+      "outcomeIndex": 0,
+      "collateralOutOnSell": "950000"
     }
   ],
   "type": "AMM"
+}
+```
+
+**CLOB markets:**
+
+```json
+{
+  "account": "0xabcd...",
+  "marketSlug": "btc-100k-weekly",
+  "positions": [
+    {
+      "tokenId": "19633204485790...",
+      "ctfBalance": "10000000",
+      "averageFillPrice": "0.65",
+      "costBasis": "6500000",
+      "marketValue": "7000000",
+      "marketId": 7348
+    }
+  ],
+  "tokenIds": ["19633204485790..."],
+  "type": "CLOB"
 }
 ```
