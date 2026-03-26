@@ -1252,7 +1252,7 @@
     },
     "/portfolio/trades": {
       "get": {
-        "description": "Retrieve all trades executed by the authenticated user",
+        "description": "Retrieve all AMM trades executed by the authenticated user",
         "operationId": "PortfolioController_getTrades",
         "parameters": [],
         "responses": {
@@ -1261,8 +1261,10 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HistoryTradeDto"
+                  }
                 }
               }
             }
@@ -3062,6 +3064,71 @@
           "tokensBalance",
           "orders"
         ]
+      },
+      "HistoryTradeDto": {
+        "type": "object",
+        "description": "An AMM trade executed by the user",
+        "properties": {
+          "blockTimestamp": {
+            "type": "string",
+            "description": "Timestamp of the block containing the trade",
+            "example": "2025-09-01T11:30:31.000Z"
+          },
+          "collateralAmount": {
+            "type": "string",
+            "description": "Collateral amount traded (in token decimals)",
+            "example": "5000000"
+          },
+          "market": {
+            "type": "object",
+            "description": "Market details for the trade",
+            "properties": {
+              "conditionId": { "type": "string", "example": "0x812f578437dc..." },
+              "expirationDate": { "type": "string", "example": "Sep 1, 2025" },
+              "id": { "type": "string", "example": "0x76d3e2098Be6..." },
+              "slug": { "type": "string", "example": "doge-above-021-sep-1" },
+              "title": { "type": "string", "example": "$DOGE above $0.21652 on Sep 1?" }
+            }
+          },
+          "outcomeIndex": {
+            "type": "number",
+            "description": "Index of the outcome traded (0 = YES, 1 = NO)",
+            "example": 0
+          },
+          "outcomeTokenAmount": {
+            "type": "string",
+            "description": "Amount of outcome tokens traded",
+            "example": "10000000"
+          },
+          "outcomeTokenAmounts": {
+            "type": "array",
+            "description": "Collateral per outcome token",
+            "items": { "type": "string" },
+            "example": ["5000000", "0"]
+          },
+          "outcomeTokenNetCost": {
+            "type": "string",
+            "description": "Net cost of the outcome tokens",
+            "example": "4950000"
+          },
+          "outcomeTokenPrice": {
+            "type": "string",
+            "description": "Price of the outcome token at trade time",
+            "example": "0.50"
+          },
+          "strategy": {
+            "type": "string",
+            "description": "Trade direction",
+            "enum": ["Buy", "Sell"],
+            "example": "Buy"
+          },
+          "transactionHash": {
+            "type": "string",
+            "description": "On-chain transaction hash",
+            "example": "0xabc123..."
+          }
+        },
+        "required": ["blockTimestamp", "market", "outcomeIndex", "outcomeTokenAmounts", "outcomeTokenNetCost", "transactionHash"]
       },
       "PortfolioPositionsDto": {
         "type": "object",
