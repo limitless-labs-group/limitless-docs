@@ -1,0 +1,208 @@
+---
+title: "Go SDK"
+description: "Official Go SDK for the Limitless Exchange API"
+---
+
+## Overview
+
+The Limitless Exchange Go SDK (`limitless-exchange-go-sdk`) is a fully typed Go client for interacting with both **CLOB** and **NegRisk** prediction markets. It provides:
+
+- Strongly typed structs for all API requests and responses
+- Automatic venue caching for EIP-712 order signing
+- Built-in retry logic with exponential backoff (using Go generics)
+- WebSocket streaming with auto-reconnect
+- Functional options pattern for flexible configuration
+
+<Note>
+  The SDK requires **Go 1.22+**. All I/O methods accept a `context.Context` as the first parameter and return `error` as the last return value, following standard Go conventions.
+</Note>
+
+## Installation
+
+```bash
+go get github.com/limitless-labs-group/limitless-exchange-go-sdk@v1.0.3
+```
+
+## Quick Start
+
+<Steps>
+
+<Step title="Initialize the HTTP client">
+
+  ```go
+  package main
+
+  import (
+      "context"
+      "fmt"
+
+      limitless "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+  )
+
+  func main() {
+      client := limitless.NewHttpClient() // loads LIMITLESS_API_KEY from env
+  }
+  ```
+
+</Step>
+
+<Step title="Fetch active markets">
+
+  ```go
+  func main() {
+      client := limitless.NewHttpClient()
+      marketFetcher := limitless.NewMarketFetcher(client)
+
+      ctx := context.Background()
+      result, err := marketFetcher.GetActiveMarkets(ctx, &limitless.ActiveMarketsParams{
+          Limit: 10,
+          Page:  1,
+      })
+      if err != nil {
+          panic(err)
+      }
+
+      for _, m := range result.Data {
+          fmt.Println(m.Title, m.Slug)
+      }
+  }
+  ```
+
+</Step>
+
+<Step title="Check your positions">
+
+  ```go
+  func main() {
+      client := limitless.NewHttpClient()
+      portfolio := limitless.NewPortfolioFetcher(client)
+
+      ctx := context.Background()
+      positions, err := portfolio.GetPositions(ctx)
+      if err != nil {
+          panic(err)
+      }
+
+      for _, pos := range positions.CLOB {
+          fmt.Println(pos.Market.Title)
+      }
+  }
+  ```
+
+</Step>
+
+</Steps>
+
+## Authentication
+
+The SDK authenticates using an API key passed via the `X-API-Key` header.
+
+<Tabs>
+  <Tab title="Environment variable (recommended)">
+    Set the `LIMITLESS_API_KEY` environment variable. The `HttpClient` loads it automatically:
+
+    ```bash
+    export LIMITLESS_API_KEY="lmts_your_key_here"
+    ```
+
+    ```go
+    client := limitless.NewHttpClient() // auto-loads LIMITLESS_API_KEY
+    ```
+  </Tab>
+  <Tab title="Explicit option">
+    Pass `WithAPIKey` directly to the constructor:
+
+    ```go
+    client := limitless.NewHttpClient(
+        limitless.WithAPIKey("lmts_your_key_here"),
+    )
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Never hardcode API keys in source code or commit them to version control. Use environment variables or a secrets manager.
+</Warning>
+
+## HttpClient Options
+
+The `HttpClient` uses the functional options pattern. Pass any combination of options to `NewHttpClient()`:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `WithBaseURL(url)` | `string` | `https://api.limitless.exchange` | API base URL |
+| `WithAPIKey(key)` | `string` | Reads `LIMITLESS_API_KEY` env | API key for authentication |
+| `WithTimeout(d)` | `time.Duration` | `30s` | HTTP request timeout |
+| `WithMaxIdleConns(n)` | `int` | `50` | Maximum idle connections in the pool |
+| `WithIdleConnTimeout(d)` | `time.Duration` | `60s` | How long idle connections remain in the pool |
+| `WithTransport(t)` | `http.RoundTripper` | Default transport | Custom HTTP transport |
+| `WithAdditionalHeaders(h)` | `map[string]string` | `nil` | Extra headers merged into every request |
+| `WithLogger(l)` | `Logger` | `NoOpLogger` | Logger for request/response tracing |
+
+```go
+client := limitless.NewHttpClient(
+    limitless.WithAPIKey("lmts_your_key_here"),
+    limitless.WithTimeout(15 * time.Second),
+    limitless.WithLogger(limitless.NewConsoleLogger(limitless.LogLevelDebug)),
+)
+```
+
+## Logging
+
+The SDK provides a pluggable `Logger` interface with a built-in `ConsoleLogger`:
+
+```go
+logger := limitless.NewConsoleLogger(limitless.LogLevelDebug)
+client := limitless.NewHttpClient(limitless.WithLogger(logger))
+```
+
+| Level | Description |
+|-------|-------------|
+| `LogLevelDebug` | Verbose output including headers, venue cache operations, and raw payloads |
+| `LogLevelInfo` | General operational messages |
+| `LogLevelWarn` | Warnings about potential issues |
+| `LogLevelError` | Errors only |
+
+<Tip>
+  Set `LogLevelDebug` during development to see request headers, venue cache hits/misses, and full API responses. Switch to `LogLevelInfo` or `LogLevelWarn` in production.
+</Tip>
+
+## Source Code
+
+The SDK is open source. Contributions and issue reports are welcome.
+
+<Card title="GitHub Repository" icon="github" href="https://github.com/limitless-labs-group/limitless-exchange-go-sdk">
+  Browse the source, report issues, and contribute at github.com/limitless-labs-group/limitless-exchange-go-sdk
+</Card>
+
+## Disclaimer
+
+<Warning>
+  **USE AT YOUR OWN RISK.** This SDK is provided as-is with no guarantees. You are solely responsible for any trading activity conducted through this software. Limitless Exchange is not available to users in the United States or other restricted jurisdictions. By using this SDK, you confirm compliance with all applicable local laws and regulations.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Markets" icon="chart-bar" href="/developers/sdk/go/markets">
+    Discover markets, fetch orderbooks, and understand venue caching.
+  </Card>
+  <Card title="Market Pages" icon="compass" href="/developers/sdk/go/market-pages">
+    Browse markets by category with navigation, filters, and pagination.
+  </Card>
+  <Card title="Trading & Orders" icon="arrow-right-arrow-left" href="/developers/sdk/go/orders">
+    Place GTC and FOK orders, cancel orders, and manage token approvals.
+  </Card>
+  <Card title="Portfolio & Positions" icon="wallet" href="/developers/sdk/go/portfolio">
+    Track your open positions and trading history.
+  </Card>
+  <Card title="WebSocket Streaming" icon="bolt" href="/developers/sdk/go/websocket">
+    Subscribe to real-time orderbook and price updates.
+  </Card>
+  <Card title="Error Handling & Retry" icon="rotate" href="/developers/sdk/go/error-handling">
+    Retry logic, error types, and debugging strategies.
+  </Card>
+  <Card title="API Reference" icon="book" href="/api-reference/introduction">
+    Full REST API endpoint documentation.
+  </Card>
+</CardGroup>

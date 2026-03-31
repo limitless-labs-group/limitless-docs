@@ -1,0 +1,235 @@
+---
+title: "Markets"
+description: "Market discovery and orderbook data with the Go SDK"
+---
+
+## Overview
+
+The `MarketFetcher` handles market discovery, individual market lookups, and orderbook retrieval. It also automatically caches venue contract addresses needed for order signing.
+
+## Setup
+
+```go
+import limitless "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+
+client := limitless.NewHttpClient() // loads LIMITLESS_API_KEY from env
+marketFetcher := limitless.NewMarketFetcher(client)
+```
+
+## Fetching Active Markets
+
+Use `GetActiveMarkets()` to retrieve a paginated list of all active markets:
+
+```go
+ctx := context.Background()
+result, err := marketFetcher.GetActiveMarkets(ctx, &limitless.ActiveMarketsParams{
+    Page:   1,
+    Limit:  10,
+    SortBy: limitless.SortByLiquidity,
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, m := range result.Data {
+    fmt.Println(m.Title, m.Slug)
+}
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `Page` | `int` | `1` | Page number for pagination |
+| `Limit` | `int` | `10` | Number of markets per page |
+| `SortBy` | `ActiveMarketsSortBy` | `""` | Sort order |
+
+### Sort Options
+
+| Constant | Description |
+|----------|-------------|
+| `SortByLPRewards` | Sort by LP rewards |
+| `SortByEndingSoon` | Sort by markets ending soonest |
+| `SortByNewest` | Sort by newest markets |
+| `SortByHighValue` | Sort by highest value |
+| `SortByLiquidity` | Sort by liquidity |
+
+<Tip>
+  Use pagination parameters to avoid large responses. Start with a small `Limit` and increment `Page` as needed.
+</Tip>
+
+## Fetching a Single Market
+
+Use `GetMarket()` to retrieve full details for a specific market:
+
+```go
+market, err := marketFetcher.GetMarket(ctx, "btc-above-100k-march-2025")
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(market.Title)
+fmt.Println("YES token:", market.Tokens.Yes)
+fmt.Println("NO token:", market.Tokens.No)
+fmt.Println("Exchange:", market.Venue.Exchange)
+```
+
+The returned `Market` struct has the following key fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Title` | `string` | Human-readable market title |
+| `Slug` | `string` | URL-friendly market identifier |
+| `Tokens.Yes` | `string` | Token ID for the YES outcome |
+| `Tokens.No` | `string` | Token ID for the NO outcome |
+| `Venue.Exchange` | `string` | Exchange contract address (used as EIP-712 `verifyingContract`) |
+| `Venue.Adapter` | `*string` | Adapter contract address (used for NegRisk token approvals) |
+| `Markets` | `[]Market` | Sub-markets (for NegRisk group markets) |
+
+<Note>
+  Token IDs are returned as **strings**. Pass them directly to `OrderClient.CreateOrder()` via `FOKOrderArgs` or `GTCOrderArgs`.
+</Note>
+
+## Fetching the Orderbook
+
+Use `GetOrderBook()` to retrieve current bids and asks for a market:
+
+```go
+orderbook, err := marketFetcher.GetOrderBook(ctx, "btc-above-100k-march-2025")
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println("Bids:")
+for _, bid := range orderbook.Bids {
+    fmt.Printf("  Price: %.3f  Size: %.2f\n", bid.Price, bid.Size)
+}
+
+fmt.Println("Asks:")
+for _, ask := range orderbook.Asks {
+    fmt.Printf("  Price: %.3f  Size: %.2f\n", ask.Price, ask.Size)
+}
+
+fmt.Printf("Midpoint: %.4f\n", orderbook.AdjustedMidpoint)
+```
+
+## Fetching User Orders
+
+Use `GetUserOrders()` to retrieve your open orders on a market (requires authentication):
+
+```go
+orders, err := marketFetcher.GetUserOrders(ctx, "btc-above-100k-march-2025")
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, order := range orders {
+    fmt.Printf("Order %s: %s %.2f @ %.3f\n", order.ID, order.Side, order.Size, order.Price)
+}
+```
+
+## Venue Caching
+
+Every call to `GetMarket()` automatically caches the venue contract addresses (exchange and adapter) for that market. The `OrderClient` reads from this cache when signing orders, so you do not need to manage venues manually.
+
+<Steps>
+
+<Step title="Fetch the market">
+  Calling `GetMarket()` retrieves and caches the venue:
+
+  ```go
+  market, err := marketFetcher.GetMarket(ctx, "btc-above-100k-march-2025")
+  // Venue is now cached for this slug
+  ```
+</Step>
+
+<Step title="Check the cache">
+  You can also access the venue cache directly:
+
+  ```go
+  venue, ok := marketFetcher.GetVenue("btc-above-100k-march-2025")
+  if ok {
+      fmt.Println("Exchange:", venue.Exchange)
+  }
+  ```
+</Step>
+
+<Step title="Place an order">
+  The `OrderClient` automatically looks up the cached venue when you pass `MarketSlug`:
+
+  ```go
+  result, err := orderClient.CreateOrder(ctx, limitless.CreateOrderParams{
+      OrderType:  limitless.OrderTypeGTC,
+      MarketSlug: "btc-above-100k-march-2025",
+      Args: limitless.GTCOrderArgs{
+          TokenID: market.Tokens.Yes,
+          Side:    limitless.SideBuy,
+          Price:   0.65,
+          Size:    10.0,
+      },
+  })
+  ```
+</Step>
+
+</Steps>
+
+<Warning>
+  You **must** call `GetMarket(slug)` at least once before placing orders on that market. Without a cached venue, the `OrderClient` cannot determine the correct `verifyingContract` for EIP-712 signing.
+</Warning>
+
+## Debugging Venue Cache
+
+Enable `LogLevelDebug` logging to see venue cache operations:
+
+```go
+logger := limitless.NewConsoleLogger(limitless.LogLevelDebug)
+marketFetcher := limitless.NewMarketFetcher(client, limitless.WithMarketLogger(logger))
+
+// Output will include lines like:
+// [DEBUG] Venue cached for btc-above-100k-march-2025: exchange=0xA1b2... adapter=0xD4e5...
+// [DEBUG] Venue cache hit for btc-above-100k-march-2025
+```
+
+## Complete Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    limitless "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+)
+
+func main() {
+    client := limitless.NewHttpClient()
+    marketFetcher := limitless.NewMarketFetcher(client)
+    ctx := context.Background()
+
+    // List active markets
+    active, err := marketFetcher.GetActiveMarkets(ctx, &limitless.ActiveMarketsParams{Limit: 5})
+    if err != nil {
+        log.Fatal(err)
+    }
+    for _, m := range active.Data {
+        fmt.Printf("%s — %s\n", m.Title, m.Slug)
+    }
+
+    // Get a specific market
+    slug := active.Data[0].Slug
+    market, err := marketFetcher.GetMarket(ctx, slug)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("\nMarket: %s\n", market.Title)
+    fmt.Printf("YES token: %s\n", market.Tokens.Yes)
+    fmt.Printf("NO token:  %s\n", market.Tokens.No)
+
+    // Fetch the orderbook
+    orderbook, err := marketFetcher.GetOrderBook(ctx, slug)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("\nOrderbook — %d bids, %d asks\n", len(orderbook.Bids), len(orderbook.Asks))
+}
+```

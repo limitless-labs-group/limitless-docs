@@ -2315,12 +2315,6 @@
         "in": "header",
         "name": "lmts-api-key",
         "description": "Scoped API token with HMAC-SHA256 signing. Requires three headers: lmts-api-key (token ID), lmts-timestamp (ISO-8601), lmts-signature (Base64-encoded HMAC). See Authentication docs for details."
-      },
-      "bearer": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT",
-        "description": "JWT token for API access"
       }
     },
     "schemas": {

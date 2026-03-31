@@ -1,0 +1,247 @@
+---
+title: "WebSocket Streaming"
+description: "Real-time market data and position updates with the Go SDK"
+---
+
+## Overview
+
+The `WebSocketClient` provides real-time streaming of orderbook updates, trades, prices, and position data over a persistent WebSocket connection. It supports automatic reconnection with exponential backoff and event-driven message handling. The WebSocket client is standalone and does not require an `HttpClient`.
+
+## Setup
+
+```go
+import limitless "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+
+ws := limitless.NewWebSocketClient(
+    limitless.WithWebSocketAPIKey("lmts_your_key_here"), // or reads LIMITLESS_API_KEY from env
+)
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `WithWebSocketURL(url)` | `string` | `wss://ws.limitless.exchange` | WebSocket server URL |
+| `WithWebSocketAPIKey(key)` | `string` | Reads `LIMITLESS_API_KEY` env | API key for authenticated channels |
+| `WithAutoReconnect(b)` | `bool` | `true` | Automatically reconnect on disconnection |
+| `WithReconnectDelay(d)` | `time.Duration` | `1s` | Initial delay between reconnection attempts |
+| `WithMaxReconnectAttempts(n)` | `int` | `0` (unlimited) | Maximum reconnection attempts |
+| `WithWebSocketTimeout(d)` | `time.Duration` | `10s` | Connection timeout |
+| `WithWebSocketLogger(l)` | `Logger` | `NoOpLogger` | Logger for connection events |
+
+## Connecting
+
+```go
+ctx := context.Background()
+err := ws.Connect(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+defer ws.Disconnect()
+```
+
+### Connection States
+
+| Constant | Description |
+|----------|-------------|
+| `StateDisconnected` | Not connected |
+| `StateConnecting` | Connection in progress |
+| `StateConnected` | Connected and ready |
+| `StateReconnecting` | Reconnecting after a drop |
+| `StateError` | Connection error |
+
+Check the current state with `ws.State()` or `ws.IsConnected()`.
+
+## Event Handlers
+
+Register handlers using `On()` for persistent handlers or `Once()` for one-time handlers. Both return a handler ID that can be used with `Off()` to unregister.
+
+```go
+// Persistent handler
+handlerID := ws.On("orderbookUpdate", func(data json.RawMessage) {
+    fmt.Println("Orderbook update:", string(data))
+})
+
+// One-time handler
+ws.Once("orderbookUpdate", func(data json.RawMessage) {
+    fmt.Println("First orderbook update received")
+})
+
+// Remove a handler
+ws.Off("orderbookUpdate", handlerID)
+```
+
+### Typed Event Handlers
+
+The SDK provides convenience methods that automatically deserialize events into typed structs:
+
+```go
+ws.OnOrderbookUpdate(func(update limitless.OrderbookUpdate) {
+    fmt.Printf("[%s] %d bids, %d asks\n",
+        update.MarketSlug, len(update.Orderbook.Bids), len(update.Orderbook.Asks))
+})
+
+ws.OnTrade(func(trade limitless.TradeEvent) {
+    fmt.Printf("[%s] %s %.2f @ %.3f\n",
+        trade.MarketSlug, trade.Side, trade.Size, trade.Price)
+})
+
+ws.OnOrder(func(order limitless.OrderUpdate) {
+    fmt.Printf("Order %s: %s\n", order.OrderID, order.Status)
+})
+
+ws.OnFill(func(fill limitless.FillEvent) {
+    fmt.Printf("Fill %s: %.2f @ %.3f\n", fill.FillID, fill.Size, fill.Price)
+})
+
+ws.OnNewPriceData(func(price limitless.NewPriceData) {
+    fmt.Printf("Price update for %s\n", price.MarketAddress)
+})
+
+ws.OnTransaction(func(tx limitless.TransactionEvent) {
+    fmt.Printf("Transaction %s: %s\n", tx.TxHash, tx.Status)
+})
+
+ws.OnMarket(func(market limitless.MarketUpdateEvent) {
+    fmt.Printf("[%s] Last price: %.3f\n", market.MarketSlug, market.LastPrice)
+})
+```
+
+### Available Events
+
+| Event | Typed Handler | Payload | Description |
+|-------|---------------|---------|-------------|
+| `orderbookUpdate` | `OnOrderbookUpdate` | `OrderbookUpdate` | Orderbook changes (bids/asks) |
+| `trade` | `OnTrade` | `TradeEvent` | New trade executed |
+| `order` | `OnOrder` | `OrderUpdate` | Order status change |
+| `fill` | `OnFill` | `FillEvent` | Order fill event |
+| `newPriceData` | `OnNewPriceData` | `NewPriceData` | AMM price update |
+| `tx` | `OnTransaction` | `TransactionEvent` | On-chain transaction update |
+| `market` | `OnMarket` | `MarketUpdateEvent` | Market data update |
+
+## Subscribing to Channels
+
+After connecting, subscribe to specific channels to receive updates:
+
+```go
+err := ws.Subscribe(ctx, limitless.ChannelOrderbook, limitless.SubscriptionOptions{
+    MarketSlugs: []string{"btc-above-100k-march-2025"},
+})
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+### Public Channels (no authentication required)
+
+| Constant | Description |
+|----------|-------------|
+| `ChannelOrderbook` | Orderbook updates for specific markets |
+| `ChannelTrades` | Trade events for specific markets |
+| `ChannelMarkets` | Market-level updates |
+| `ChannelPrices` | AMM price data |
+| `ChannelSubscribeMarketPrices` | Subscribe to market price updates |
+
+### Authenticated Channels (require API key)
+
+| Constant | Description |
+|----------|-------------|
+| `ChannelOrders` | Your order status updates |
+| `ChannelFills` | Your order fill events |
+| `ChannelSubscribePositions` | Your position updates |
+| `ChannelSubscribeTransactions` | Your transaction updates |
+
+### SubscriptionOptions
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `MarketSlug` | `string` | Single market slug |
+| `MarketSlugs` | `[]string` | Multiple market slugs |
+| `MarketAddress` | `string` | Single market address |
+| `MarketAddresses` | `[]string` | Multiple market addresses |
+| `Filters` | `map[string]any` | Additional filter parameters |
+
+## Unsubscribing
+
+```go
+err := ws.Unsubscribe(ctx, limitless.ChannelOrderbook, limitless.SubscriptionOptions{
+    MarketSlugs: []string{"btc-above-100k-march-2025"},
+})
+```
+
+## Auto-Reconnect
+
+When `WithAutoReconnect(true)` is set (the default), the client automatically reconnects after a disconnection using exponential backoff with jitter (capped at 60 seconds):
+
+1. The connection drops (network issue, server restart, etc.)
+2. The client waits with exponential backoff
+3. A new connection is established
+4. Subscriptions must be re-established
+
+<Note>
+  Re-subscribe to your channels after reconnection. You can detect reconnection by checking `ws.State()` or using a handler on the connection event.
+</Note>
+
+## Complete Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "os"
+    "os/signal"
+    "syscall"
+
+    limitless "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+)
+
+func main() {
+    ws := limitless.NewWebSocketClient(
+        limitless.WithAutoReconnect(true),
+        limitless.WithWebSocketLogger(limitless.NewConsoleLogger(limitless.LogLevelInfo)),
+    )
+
+    // Register typed event handlers
+    ws.OnOrderbookUpdate(func(update limitless.OrderbookUpdate) {
+        fmt.Printf("[%s] Orderbook: %d bids, %d asks\n",
+            update.MarketSlug, len(update.Orderbook.Bids), len(update.Orderbook.Asks))
+    })
+
+    ws.OnTrade(func(trade limitless.TradeEvent) {
+        fmt.Printf("[%s] Trade: %s %.2f @ %.3f\n",
+            trade.MarketSlug, trade.Side, trade.Size, trade.Price)
+    })
+
+    // Connect
+    ctx := context.Background()
+    if err := ws.Connect(ctx); err != nil {
+        log.Fatal(err)
+    }
+    defer ws.Disconnect()
+
+    // Subscribe to orderbook and trades
+    if err := ws.Subscribe(ctx, limitless.ChannelOrderbook, limitless.SubscriptionOptions{
+        MarketSlugs: []string{"btc-above-100k-march-2025"},
+    }); err != nil {
+        log.Fatal(err)
+    }
+
+    if err := ws.Subscribe(ctx, limitless.ChannelTrades, limitless.SubscriptionOptions{
+        MarketSlugs: []string{"btc-above-100k-march-2025"},
+    }); err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Println("Listening for updates... Press Ctrl+C to exit.")
+
+    // Block until interrupt
+    sigCh := make(chan os.Signal, 1)
+    signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+    <-sigCh
+}
+```
+
+<Warning>
+  The `ws.Disconnect()` call cleans up the connection and clears all subscriptions. Always defer it after a successful `Connect()`.
+</Warning>

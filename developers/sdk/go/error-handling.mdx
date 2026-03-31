@@ -1,0 +1,276 @@
+---
+title: "Error Handling & Retry"
+description: "Retry logic and error handling with the Go SDK"
+---
+
+## Overview
+
+The SDK provides a typed error hierarchy, a generic retry function with exponential backoff, a `RetryableClient` wrapper, and pluggable logging — all following idiomatic Go patterns.
+
+## Error Types
+
+All API errors implement the `error` interface and can be inspected using `errors.As()`:
+
+```go
+import "errors"
+
+_, err := marketFetcher.GetMarket(ctx, "invalid-slug")
+if err != nil {
+    var apiErr *limitless.APIError
+    if errors.As(err, &apiErr) {
+        fmt.Printf("Status: %d\n", apiErr.Status)
+        fmt.Printf("Message: %s\n", apiErr.Message)
+        fmt.Printf("URL: %s %s\n", apiErr.Method, apiErr.URL)
+    }
+}
+```
+
+### APIError
+
+The base error type for all HTTP errors. Its `Error()` method returns a formatted string like `"API error 401 GET /path: message"`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Status` | `int` | HTTP status code (e.g. `400`, `401`, `429`, `500`) |
+| `Message` | `string` | Human-readable error message from the API |
+| `Data` | `json.RawMessage` | Raw response body |
+| `URL` | `string` | Request URL path |
+| `Method` | `string` | HTTP method |
+
+### Specialized Error Types
+
+The SDK provides three specialized error types that embed `APIError`:
+
+| Type | HTTP Status | Description |
+|------|-------------|-------------|
+| `*ValidationError` | `400` | Bad request — invalid parameters or malformed payload |
+| `*AuthenticationError` | `401`, `403` | Missing/invalid API key or insufficient permissions |
+| `*RateLimitError` | `429` | Rate limit exceeded |
+
+```go
+var rateLimitErr *limitless.RateLimitError
+if errors.As(err, &rateLimitErr) {
+    fmt.Println("Rate limited! Back off and retry.")
+}
+
+var authErr *limitless.AuthenticationError
+if errors.As(err, &authErr) {
+    fmt.Println("Check your API key.")
+}
+
+var validErr *limitless.ValidationError
+if errors.As(err, &validErr) {
+    fmt.Println("Invalid request:", validErr.Message)
+}
+```
+
+### OrderValidationError
+
+Client-side validation errors thrown before a request is made:
+
+```go
+var orderErr *limitless.OrderValidationError
+if errors.As(err, &orderErr) {
+    fmt.Printf("Field %s: %s\n", orderErr.Field, orderErr.Message)
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Field` | `string` | The field that failed validation (e.g. `"price"`, `"tokenId"`) |
+| `Message` | `string` | Description of the validation failure |
+
+### Common Status Codes
+
+| Code | Meaning | Typical Cause |
+|------|---------|---------------|
+| `400` | Bad Request | Invalid order parameters, malformed payload |
+| `401` | Unauthorized | Missing or invalid API key |
+| `403` | Forbidden | Insufficient permissions or geographic restriction |
+| `404` | Not Found | Invalid market slug or order ID |
+| `429` | Too Many Requests | Rate limit exceeded |
+| `500` | Internal Server Error | Transient server-side failure |
+
+### Helper Method
+
+`APIError` provides an `IsAuthError()` method to quickly check for authentication issues:
+
+```go
+if apiErr.IsAuthError() {
+    fmt.Println("Authentication problem — check your API key")
+}
+```
+
+## WithRetry (Generic)
+
+The SDK provides a generic `WithRetry` function that wraps any operation with configurable retry logic using Go generics:
+
+```go
+market, err := limitless.WithRetry(ctx, func() (*limitless.Market, error) {
+    return marketFetcher.GetMarket(ctx, "btc-above-100k-march-2025")
+}, limitless.RetryConfig{
+    StatusCodes:     []int{429, 500, 502, 503, 504},
+    MaxRetries:      3,
+    ExponentialBase: 2.0,
+    MaxDelay:        60 * time.Second,
+    OnRetry: func(attempt int, err error, delay time.Duration) {
+        fmt.Printf("Retry %d after %s: %v\n", attempt, delay, err)
+    },
+})
+```
+
+### RetryConfig
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `StatusCodes` | `[]int` | `[429, 500, 502, 503, 504]` | HTTP status codes that trigger a retry |
+| `MaxRetries` | `int` | `3` | Maximum number of retry attempts |
+| `Delays` | `[]time.Duration` | `nil` | Fixed delays per attempt (overrides exponential backoff) |
+| `ExponentialBase` | `float64` | `2.0` | Base for exponential backoff calculation |
+| `MaxDelay` | `time.Duration` | `60s` | Maximum delay between retries |
+| `OnRetry` | `func(int, error, time.Duration)` | `nil` | Callback invoked on each retry |
+
+<Note>
+  `WithRetry` only retries when the error is an `*APIError` whose `Status` is in the `StatusCodes` list. All other errors propagate immediately.
+</Note>
+
+### Fixed Delays
+
+Override exponential backoff with explicit per-attempt delays:
+
+```go
+config := limitless.RetryConfig{
+    StatusCodes: []int{429, 500},
+    MaxRetries:  3,
+    Delays:      []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second},
+}
+```
+
+## RetryableClient
+
+For broader retry coverage, wrap your `HttpClient` with `RetryableClient`. This applies retry logic to **all** API calls made through the client:
+
+```go
+client := limitless.NewHttpClient()
+retryable := limitless.NewRetryableClient(client, limitless.RetryConfig{
+    StatusCodes:     []int{429, 500, 502, 503, 504},
+    MaxRetries:      3,
+    ExponentialBase: 2.0,
+})
+
+// Use retryable in place of client
+marketFetcher := limitless.NewMarketFetcher(retryable.Client)
+```
+
+The `RetryableClient` has the same methods as `HttpClient` (`Get`, `GetRaw`, `Post`, `Delete`) and transparently retries on configured status codes.
+
+<Tip>
+  Use `RetryableClient` for automated trading bots that need resilience against transient failures without wrapping every call in `WithRetry` individually.
+</Tip>
+
+## Debugging with ConsoleLogger
+
+Enable verbose logging to trace requests, responses, and internal operations:
+
+```go
+logger := limitless.NewConsoleLogger(limitless.LogLevelDebug)
+client := limitless.NewHttpClient(limitless.WithLogger(logger))
+```
+
+At `LogLevelDebug`, the logger outputs:
+
+- Request and response headers
+- Venue cache hits and misses
+- Full API response bodies
+- Retry attempts and delays
+- WebSocket connection state changes
+
+<Accordion title="Example DEBUG output">
+```
+[DEBUG] GET /markets/btc-above-100k-march-2025
+[DEBUG] Headers: {X-API-Key: lmts_***, Content-Type: application/json}
+[DEBUG] Response 200 in 142ms
+[DEBUG] Venue cached for btc-above-100k-march-2025: exchange=0xA1b2... adapter=0xD4e5...
+[DEBUG] POST /orders
+[DEBUG] Response 429 in 38ms
+[DEBUG] Retry 1/3 after 1s — status 429
+[DEBUG] POST /orders
+[DEBUG] Response 200 in 156ms
+```
+</Accordion>
+
+### Custom Logger
+
+Implement the `Logger` interface to plug in your own logging backend:
+
+```go
+type Logger interface {
+    Debug(msg string, meta ...map[string]any)
+    Info(msg string, meta ...map[string]any)
+    Warn(msg string, meta ...map[string]any)
+    Error(msg string, err error, meta ...map[string]any)
+}
+```
+
+<Note>
+  The `Error` method has an additional `err error` parameter compared to the other methods, allowing structured error logging.
+</Note>
+
+## Best Practices
+
+<Steps>
+
+<Step title="Always check errors">
+  Every SDK method returns `error` as the last return value. Always check it:
+
+  ```go
+  result, err := orderClient.CreateOrder(ctx, params)
+  if err != nil {
+      var apiErr *limitless.APIError
+      if errors.As(err, &apiErr) {
+          log.Printf("API error %d: %s", apiErr.Status, apiErr.Message)
+      }
+      return err
+  }
+  ```
+</Step>
+
+<Step title="Use typed error assertions">
+  Use `errors.As()` to match specific error types and handle them differently:
+
+  ```go
+  var rateLimitErr *limitless.RateLimitError
+  if errors.As(err, &rateLimitErr) {
+      // Back off and retry
+  }
+  var authErr *limitless.AuthenticationError
+  if errors.As(err, &authErr) {
+      // Check API key configuration
+  }
+  ```
+</Step>
+
+<Step title="Retry only transient errors">
+  Limit retries to status codes like `429` (rate limit) and `5xx` (server errors). Do not retry `400` (bad request) or `401` (auth failure) as these require corrective action.
+</Step>
+
+<Step title="Use exponential backoff">
+  The default `RetryConfig` uses exponential backoff with a base of 2.0. Avoid fixed short delays that could overwhelm the API during outages.
+</Step>
+
+<Step title="Pass context for cancellation">
+  Always pass a `context.Context` to allow timeouts and cancellation:
+
+  ```go
+  ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+  defer cancel()
+
+  market, err := marketFetcher.GetMarket(ctx, slug)
+  ```
+</Step>
+
+<Step title="Use DEBUG logging during development">
+  Enable `LogLevelDebug` to see the full request/response cycle. Switch to `LogLevelInfo` or `LogLevelWarn` in production to reduce noise.
+</Step>
+
+</Steps>

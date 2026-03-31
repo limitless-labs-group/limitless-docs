@@ -15,7 +15,7 @@ If you've built bots or agents on Polymarket, this guide maps every concept, end
 | **REST hosts** | `gamma-api.polymarket.com` (data) + `clob.polymarket.com` (trading) | `api.limitless.exchange` (unified) |
 | **WebSocket** | `wss://ws-subscriptions-clob.polymarket.com` | `wss://ws.limitless.exchange` |
 | **Auth model** | L1/L2 — derive API creds with EIP-712, sign every request with HMAC | Single API key in `X-API-Key` header |
-| **SDKs** | `py-clob-client`, `@polymarket/clob-client`, `polymarket-client-sdk` (Rust) | [Python SDK](/developers/sdk/python/getting-started), [TypeScript SDK](/developers/sdk/typescript/getting-started), or direct REST |
+| **SDKs** | `py-clob-client`, `@polymarket/clob-client`, `polymarket-client-sdk` (Rust) | [Python SDK](/developers/sdk/python/getting-started), [TypeScript SDK](/developers/sdk/typescript/getting-started), [Go SDK](/developers/sdk/go/getting-started), or direct REST |
 | **Wallet types** | EOA, Proxy, Gnosis Safe | EOA |
 | **Market lookup** | `condition_id` or `clobTokenIds` | `slug` or address |
 | **Token IDs** | `clobTokenIds[0]` = Yes, `[1]` = No | `positionIds[0]` = Yes, `[1]` = No |
@@ -239,7 +239,7 @@ The order structure is almost identical — both use EIP-712 typed data with the
 </Note>
 
 <Tip>
-  If you use the [Python SDK](/developers/sdk/python/getting-started) or [TypeScript SDK](/developers/sdk/typescript/getting-started), order building and signing are handled for you — similar to how `py-clob-client` works on Polymarket.
+  If you use the [Python SDK](/developers/sdk/python/getting-started), [TypeScript SDK](/developers/sdk/typescript/getting-started), or [Go SDK](/developers/sdk/go/getting-started), order building and signing are handled for you — similar to how `py-clob-client` works on Polymarket.
 </Tip>
 
 ## Porting a Polymarket agent

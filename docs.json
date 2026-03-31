@@ -107,6 +107,18 @@
             ]
           },
           {
+            "group": "Go SDK",
+            "pages": [
+              "developers/sdk/go/getting-started",
+              "developers/sdk/go/markets",
+              "developers/sdk/go/market-pages",
+              "developers/sdk/go/orders",
+              "developers/sdk/go/portfolio",
+              "developers/sdk/go/websocket",
+              "developers/sdk/go/error-handling"
+            ]
+          },
+          {
             "group": "WebSocket",
             "pages": [
               "developers/websocket-events"

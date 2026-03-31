@@ -1,0 +1,333 @@
+---
+title: "Trading & Orders"
+description: "Create and manage orders with the Go SDK"
+---
+
+## Overview
+
+The `OrderClient` handles order creation, EIP-712 signing, and order management. It supports both Good-Till-Cancelled (GTC) limit orders and Fill-or-Kill (FOK) market orders.
+
+## Prerequisites
+
+Before placing orders, you need three components:
+
+```go
+import (
+    "context"
+    "log"
+
+    limitless "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+)
+
+client := limitless.NewHttpClient()   // loads LIMITLESS_API_KEY from env
+marketFetcher := limitless.NewMarketFetcher(client)
+
+orderClient, err := limitless.NewOrderClient(
+    client,
+    "0xYOUR_PRIVATE_KEY",  // hex-encoded private key (with or without "0x" prefix)
+)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+| Component | Purpose |
+|-----------|---------|
+| `HttpClient` | Authenticated HTTP client for API requests |
+| `MarketFetcher` | Fetches market data and caches venue addresses |
+| `OrderClient` | Creates, signs, and submits orders |
+
+<Note>
+  The `OrderClient` lazily fetches your user profile on the first order to determine your fee rate. The `CHAIN_ID` environment variable defaults to `8453` (Base mainnet).
+</Note>
+
+## Token Approvals
+
+Before your first trade on a given venue, you must approve the exchange contracts to spend your tokens. This is a **one-time on-chain setup** per venue.
+
+<Tabs>
+  <Tab title="Standard CLOB">
+    For standard CLOB markets, approve USDC and Conditional Tokens to the **exchange** contract:
+
+    ```go
+    market, _ := marketFetcher.GetMarket(ctx, "your-market-slug")
+    exchange := market.Venue.Exchange
+
+    // Use go-ethereum or any Ethereum client to send approval transactions:
+    // 1. Approve USDC (0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913) to the exchange for BUY orders
+    // 2. Approve Conditional Tokens (0xC9c98965297Bc527861c898329Ee280632B76e18) to the exchange for SELL orders
+    ```
+  </Tab>
+  <Tab title="NegRisk">
+    For NegRisk markets, you must additionally approve the **adapter** contract:
+
+    ```go
+    market, _ := marketFetcher.GetMarket(ctx, "your-negrisk-slug")
+    exchange := market.Venue.Exchange
+    adapter := *market.Venue.Adapter
+
+    // 1. Approve USDC to the exchange (same as CLOB)
+    // 2. Approve Conditional Tokens to the exchange (same as CLOB)
+    // 3. Approve Conditional Tokens to the adapter (NegRisk only)
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Approvals are on-chain transactions that cost gas. You only need to perform them once per venue. Use `Venue.Exchange` for both CLOB and NegRisk, and additionally `Venue.Adapter` for NegRisk markets.
+</Warning>
+
+## GTC Orders (Good-Till-Cancelled)
+
+GTC orders remain on the orderbook until filled or explicitly cancelled. Specify `Price` (0.0–1.0, tick-aligned to 0.001) and `Size` (number of shares):
+
+```go
+ctx := context.Background()
+market, err := marketFetcher.GetMarket(ctx, "btc-above-100k-march-2025")
+if err != nil {
+    log.Fatal(err)
+}
+
+result, err := orderClient.CreateOrder(ctx, limitless.CreateOrderParams{
+    OrderType:  limitless.OrderTypeGTC,
+    MarketSlug: "btc-above-100k-march-2025",
+    Args: limitless.GTCOrderArgs{
+        TokenID: market.Tokens.Yes,
+        Side:    limitless.SideBuy,
+        Price:   0.65,
+        Size:    10.0,
+    },
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Order placed: %+v\n", result.Order)
+```
+
+### GTCOrderArgs
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `TokenID` | `string` | Token ID from `Market.Tokens.Yes` or `Market.Tokens.No` |
+| `Side` | `Side` | `SideBuy` (0) or `SideSell` (1) |
+| `Price` | `float64` | Price per share (0.0–1.0, must be tick-aligned to 0.001) |
+| `Size` | `float64` | Number of shares to buy or sell |
+| `Expiration` | `string` | Optional expiration timestamp |
+| `Nonce` | `string` | Optional nonce (auto-generated if empty) |
+| `Taker` | `string` | Optional taker address (defaults to zero address) |
+
+## FOK Orders (Fill-or-Kill)
+
+FOK orders execute immediately and fully, or are rejected entirely. Instead of `Price` and `Size`, you specify `MakerAmount`:
+
+<Tabs>
+  <Tab title="FOK BUY">
+    When buying, `MakerAmount` is the **total USDC you want to spend** (max 6 decimal places). The exchange fills as many shares as possible at the best available price:
+
+    ```go
+    result, err := orderClient.CreateOrder(ctx, limitless.CreateOrderParams{
+        OrderType:  limitless.OrderTypeFOK,
+        MarketSlug: "btc-above-100k-march-2025",
+        Args: limitless.FOKOrderArgs{
+            TokenID:     market.Tokens.Yes,
+            Side:        limitless.SideBuy,
+            MakerAmount: 10.0, // spend 10 USDC
+        },
+    })
+    ```
+  </Tab>
+  <Tab title="FOK SELL">
+    When selling, `MakerAmount` is the **number of shares to sell**. The exchange returns USDC at the best available price:
+
+    ```go
+    result, err := orderClient.CreateOrder(ctx, limitless.CreateOrderParams{
+        OrderType:  limitless.OrderTypeFOK,
+        MarketSlug: "btc-above-100k-march-2025",
+        Args: limitless.FOKOrderArgs{
+            TokenID:     market.Tokens.Yes,
+            Side:        limitless.SideSell,
+            MakerAmount: 10.0, // sell 10 shares
+        },
+    })
+    ```
+  </Tab>
+</Tabs>
+
+### FOKOrderArgs
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `TokenID` | `string` | Token ID from `Market.Tokens.Yes` or `Market.Tokens.No` |
+| `Side` | `Side` | `SideBuy` (0) or `SideSell` (1) |
+| `MakerAmount` | `float64` | USDC to spend (buy) or shares to sell (sell), max 6 decimal places |
+| `Expiration` | `string` | Optional expiration timestamp |
+| `Nonce` | `string` | Optional nonce (auto-generated if empty) |
+| `Taker` | `string` | Optional taker address (defaults to zero address) |
+
+## Advanced: Build and Sign Separately
+
+For advanced use cases, you can build and sign orders without submitting them:
+
+```go
+// Build an unsigned order
+unsigned, err := orderClient.BuildUnsignedOrder(ctx, limitless.GTCOrderArgs{
+    TokenID: market.Tokens.Yes,
+    Side:    limitless.SideBuy,
+    Price:   0.65,
+    Size:    10.0,
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+// Sign the order
+signature, err := orderClient.SignOrder(unsigned)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println("Signature:", signature)
+```
+
+## Cancelling Orders
+
+<Tabs>
+  <Tab title="Cancel a single order">
+    Cancel a specific order by its ID:
+
+    ```go
+    msg, err := orderClient.Cancel(ctx, "abc123-def456")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println(msg)
+    ```
+  </Tab>
+  <Tab title="Cancel all orders on a market">
+    Cancel every open order you have on a given market:
+
+    ```go
+    msg, err := orderClient.CancelAll(ctx, "btc-above-100k-march-2025")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println(msg)
+    ```
+  </Tab>
+</Tabs>
+
+## Enums Reference
+
+### Side
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `SideBuy` | `0` | Buy shares with USDC |
+| `SideSell` | `1` | Sell shares for USDC |
+
+### OrderType
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `OrderTypeGTC` | `"GTC"` | Good-Till-Cancelled limit order (rests on the book) |
+| `OrderTypeFOK` | `"FOK"` | Fill-or-Kill market order (fills immediately or rejects) |
+
+## Error Handling
+
+The SDK returns typed errors for order failures. Use `errors.As()` to inspect them:
+
+```go
+import "errors"
+
+result, err := orderClient.CreateOrder(ctx, params)
+if err != nil {
+    var apiErr *limitless.APIError
+    if errors.As(err, &apiErr) {
+        fmt.Printf("Order failed — status %d: %s\n", apiErr.Status, apiErr.Message)
+    }
+
+    var validErr *limitless.OrderValidationError
+    if errors.As(err, &validErr) {
+        fmt.Printf("Validation error on field %s: %s\n", validErr.Field, validErr.Message)
+    }
+}
+```
+
+<Note>
+  See [Error Handling & Retry](/developers/sdk/go/error-handling) for details on error types and the `WithRetry` function.
+</Note>
+
+## Complete Example
+
+```go
+package main
+
+import (
+    "context"
+    "errors"
+    "fmt"
+    "log"
+
+    limitless "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+)
+
+func main() {
+    client := limitless.NewHttpClient()
+    marketFetcher := limitless.NewMarketFetcher(client)
+    ctx := context.Background()
+
+    orderClient, err := limitless.NewOrderClient(client, "0xYOUR_PRIVATE_KEY")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Println("Wallet:", orderClient.WalletAddress())
+
+    // Fetch market (caches venue automatically)
+    market, err := marketFetcher.GetMarket(ctx, "btc-above-100k-march-2025")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Place a GTC BUY order for 10 YES shares at $0.65
+    result, err := orderClient.CreateOrder(ctx, limitless.CreateOrderParams{
+        OrderType:  limitless.OrderTypeGTC,
+        MarketSlug: "btc-above-100k-march-2025",
+        Args: limitless.GTCOrderArgs{
+            TokenID: market.Tokens.Yes,
+            Side:    limitless.SideBuy,
+            Price:   0.65,
+            Size:    10.0,
+        },
+    })
+    if err != nil {
+        var apiErr *limitless.APIError
+        if errors.As(err, &apiErr) {
+            log.Fatalf("API error — status %d: %s", apiErr.Status, apiErr.Message)
+        }
+        log.Fatal(err)
+    }
+    fmt.Printf("GTC order placed: %+v\n", result.Order)
+
+    // Place a FOK BUY order spending 5 USDC
+    fokResult, err := orderClient.CreateOrder(ctx, limitless.CreateOrderParams{
+        OrderType:  limitless.OrderTypeFOK,
+        MarketSlug: "btc-above-100k-march-2025",
+        Args: limitless.FOKOrderArgs{
+            TokenID:     market.Tokens.Yes,
+            Side:        limitless.SideBuy,
+            MakerAmount: 5.0,
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("FOK order placed: %+v\n", fokResult.Order)
+
+    // Cancel all orders on this market
+    msg, err := orderClient.CancelAll(ctx, "btc-above-100k-march-2025")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println("Cancelled:", msg)
+}
+```

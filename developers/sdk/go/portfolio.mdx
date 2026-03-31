@@ -1,0 +1,187 @@
+---
+title: "Portfolio & Positions"
+description: "Track positions and history with the Go SDK"
+---
+
+## Overview
+
+The `PortfolioFetcher` retrieves your open positions, user profile, and trading history from the Limitless Exchange API. It requires an authenticated `HttpClient` with a valid API key.
+
+## Setup
+
+```go
+import limitless "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+
+client := limitless.NewHttpClient() // loads LIMITLESS_API_KEY from env
+portfolio := limitless.NewPortfolioFetcher(client)
+```
+
+<Note>
+  `PortfolioFetcher` requires an authenticated client. Ensure your API key is set via the `LIMITLESS_API_KEY` environment variable or the `WithAPIKey` option on `HttpClient`.
+</Note>
+
+## Fetching Your Profile
+
+Use `GetProfile()` to retrieve a user profile by wallet address:
+
+```go
+ctx := context.Background()
+profile, err := portfolio.GetProfile(ctx, "0xYOUR_WALLET_ADDRESS")
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Username: %s\n", profile.Username)
+fmt.Printf("Display name: %s\n", profile.DisplayName)
+if profile.Rank != nil {
+    fmt.Printf("Rank: %s (fee rate: %d bps)\n", profile.Rank.Name, profile.Rank.FeeRateBps)
+}
+```
+
+### UserProfile Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ID` | `int` | User ID |
+| `Account` | `string` | Wallet address |
+| `Username` | `string` | Username |
+| `DisplayName` | `string` | Display name |
+| `Rank` | `*UserRank` | User rank with fee rate |
+| `Points` | `float64` | Accumulated points |
+
+## Fetching All Positions
+
+Use `GetPositions()` to retrieve all your open positions:
+
+```go
+positions, err := portfolio.GetPositions(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("CLOB positions: %d\n", len(positions.CLOB))
+fmt.Printf("AMM positions: %d\n", len(positions.AMM))
+```
+
+The response is a `PortfolioPositionsResponse` with the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `CLOB` | `[]CLOBPosition` | Positions on CLOB (order book) markets |
+| `AMM` | `[]AMMPosition` | Positions on AMM (automated market maker) markets |
+| `Points` | `float64` | Accumulated points |
+| `Rewards` | `float64` | Accumulated rewards |
+
+## CLOB Positions
+
+Use `GetCLOBPositions()` for CLOB-only positions, or iterate over `positions.CLOB`:
+
+```go
+clobPositions, err := portfolio.GetCLOBPositions(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, pos := range clobPositions {
+    fmt.Printf("%s — tokens balance: %s\n", pos.Market.Title, pos.TokensBalance)
+}
+```
+
+### CLOBPosition Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Market` | `PositionMarket` | Market title, slug, and metadata |
+| `MakerAddress` | `string` | Your wallet address |
+| `Positions` | `CLOBPositionSides` | Position details per side |
+| `TokensBalance` | `string` | Current token balance |
+| `LatestTrade` | `any` | Most recent trade on this position |
+| `Orders` | `any` | Open orders |
+
+## AMM Positions
+
+Use `GetAMMPositions()` for AMM-only positions:
+
+```go
+ammPositions, err := portfolio.GetAMMPositions(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, pos := range ammPositions {
+    fmt.Printf("%s — outcome: %d, unrealized PnL: %s\n",
+        pos.Market.Title, pos.OutcomeIndex, pos.UnrealizedPnl)
+}
+```
+
+### AMMPosition Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Market` | `PositionMarket` | Market title, slug, and metadata |
+| `Account` | `string` | Your wallet address |
+| `OutcomeIndex` | `int` | Outcome index |
+| `CollateralAmount` | `string` | Collateral deposited |
+| `OutcomeTokenAmount` | `string` | Outcome tokens held |
+| `AverageFillPrice` | `string` | Average entry price |
+| `RealizedPnl` | `string` | Realized profit and loss |
+| `UnrealizedPnl` | `string` | Unrealized profit and loss |
+
+## Trading History
+
+Use `GetUserHistory()` to retrieve paginated trading history:
+
+```go
+history, err := portfolio.GetUserHistory(ctx, 1, 20) // page 1, 20 items per page
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Total trades: %d\n", history.TotalCount)
+for _, entry := range history.Data {
+    fmt.Printf("%+v\n", entry)
+}
+```
+
+## Complete Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    limitless "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+)
+
+func main() {
+    client := limitless.NewHttpClient()
+    portfolio := limitless.NewPortfolioFetcher(client)
+    ctx := context.Background()
+
+    // Fetch all positions
+    positions, err := portfolio.GetPositions(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Printf("CLOB positions: %d\n", len(positions.CLOB))
+    for _, pos := range positions.CLOB {
+        fmt.Printf("  %s — tokens: %s\n", pos.Market.Title, pos.TokensBalance)
+    }
+
+    fmt.Printf("\nAMM positions: %d\n", len(positions.AMM))
+    for _, pos := range positions.AMM {
+        fmt.Printf("  %s — unrealized PnL: %s\n", pos.Market.Title, pos.UnrealizedPnl)
+    }
+
+    // Fetch trading history
+    history, err := portfolio.GetUserHistory(ctx, 1, 10)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("\nRecent trades: %d (total: %d)\n", len(history.Data), history.TotalCount)
+}
+```

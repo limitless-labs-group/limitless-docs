@@ -1,0 +1,272 @@
+---
+title: "Market Pages"
+description: "Navigate and filter markets with the Go SDK"
+---
+
+## Overview
+
+The `MarketPageFetcher` provides access to the Market Navigation API — a hierarchical system for browsing markets by category, applying dynamic filters, and paginating results. All endpoints are public and require no authentication.
+
+## Setup
+
+```go
+import limitless "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+
+client := limitless.NewHttpClient()
+pageFetcher := limitless.NewMarketPageFetcher(client)
+```
+
+## Navigation Tree
+
+Fetch the full navigation hierarchy. Each node represents a browseable category with a URL path.
+
+```go
+ctx := context.Background()
+navigation, err := pageFetcher.GetNavigation(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, node := range navigation {
+    fmt.Printf("%s → %s\n", node.Name, node.Path)
+    for _, child := range node.Children {
+        fmt.Printf("  %s → %s\n", child.Name, child.Path)
+    }
+}
+```
+
+### NavigationNode Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ID` | `string` | Unique identifier |
+| `Name` | `string` | Display name |
+| `Slug` | `string` | URL-friendly identifier |
+| `Path` | `string` | Full URL path (e.g. `/crypto`) |
+| `Icon` | `string` | Optional icon name |
+| `Children` | `[]NavigationNode` | Nested child nodes |
+
+## Resolving a Page by Path
+
+Convert a URL path into a `MarketPage` with its filters, metadata, and breadcrumb. The SDK handles 301 redirects internally (up to 3 levels).
+
+```go
+page, err := pageFetcher.GetMarketPageByPath(ctx, "/crypto")
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Page: %s\n", page.Name)
+fmt.Printf("Filters: %d groups\n", len(page.FilterGroups))
+```
+
+### MarketPage Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ID` | `string` | Page identifier (used for `GetMarkets()`) |
+| `Name` | `string` | Display name |
+| `Slug` | `string` | URL-friendly identifier |
+| `FullPath` | `string` | Full URL path |
+| `Description` | `string` | Page description |
+| `BaseFilter` | `map[string]any` | Default filter applied to this page |
+| `FilterGroups` | `[]FilterGroup` | Available filter groups |
+| `Metadata` | `map[string]any` | Page metadata |
+| `Breadcrumb` | `[]BreadcrumbItem` | Navigation breadcrumb |
+
+## Fetching Markets for a Page
+
+Use `GetMarkets()` with the page ID to fetch markets. Supports both offset and cursor pagination, sorting, and dynamic filters.
+
+### Offset Pagination
+
+```go
+result, err := pageFetcher.GetMarkets(ctx, page.ID, &limitless.MarketPageMarketsParams{
+    Page:  intPtr(1),
+    Limit: intPtr(20),
+    Sort:  limitless.MarketPageSortNewest,
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, market := range result.Data {
+    fmt.Printf("%s — %s\n", market.Slug, market.Title)
+}
+
+fmt.Printf("Page %d of %d\n", result.Pagination.Page, result.Pagination.TotalPages)
+```
+
+### Cursor Pagination
+
+```go
+firstPage, err := pageFetcher.GetMarkets(ctx, page.ID, &limitless.MarketPageMarketsParams{
+    Cursor: "",
+    Limit:  intPtr(20),
+    Sort:   limitless.MarketPageSortNewest,
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, market := range firstPage.Data {
+    fmt.Println(market.Slug)
+}
+
+if firstPage.Cursor != nil && firstPage.Cursor.NextCursor != "" {
+    nextPage, err := pageFetcher.GetMarkets(ctx, page.ID, &limitless.MarketPageMarketsParams{
+        Cursor: firstPage.Cursor.NextCursor,
+        Limit:  intPtr(20),
+    })
+    // ...
+}
+```
+
+<Warning>
+  You cannot use `Cursor` and `Page` in the same request. Choose one pagination strategy.
+</Warning>
+
+### Filtering
+
+Pass a `Filters` map. Values can be a single string or a slice for multi-select filters.
+
+```go
+// Single filter
+result, err := pageFetcher.GetMarkets(ctx, page.ID, &limitless.MarketPageMarketsParams{
+    Filters: map[string]any{"ticker": "btc"},
+})
+
+// Multiple values (OR logic)
+result, err = pageFetcher.GetMarkets(ctx, page.ID, &limitless.MarketPageMarketsParams{
+    Filters: map[string]any{"ticker": []string{"btc", "eth"}},
+})
+
+// Combined filters
+result, err = pageFetcher.GetMarkets(ctx, page.ID, &limitless.MarketPageMarketsParams{
+    Limit: intPtr(10),
+    Sort:  limitless.MarketPageSortNewest,
+    Filters: map[string]any{
+        "ticker":   []string{"btc", "eth"},
+        "duration": "hourly",
+    },
+})
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `Page` | `*int` | Page number (offset pagination) |
+| `Limit` | `*int` | Results per page |
+| `Sort` | `MarketPageSort` | Sort field |
+| `Cursor` | `string` | Cursor token (cursor pagination). Use `""` for the first request. |
+| `Filters` | `map[string]any` | Filter key-value pairs. Values can be `string` or `[]string`. |
+
+## Property Keys
+
+Property keys define the available filter dimensions (e.g. "ticker", "duration"). Each key has a set of options.
+
+```go
+// List all property keys
+keys, err := pageFetcher.GetPropertyKeys(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, key := range keys {
+    fmt.Printf("%s (%s)\n", key.Name, key.Type)
+}
+```
+
+### Single Key and Options
+
+```go
+key, err := pageFetcher.GetPropertyKey(ctx, keys[0].ID)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("%s — %d options\n", key.Name, len(key.Options))
+
+// Fetch options separately (supports parent filtering for hierarchical keys)
+options, err := pageFetcher.GetPropertyOptions(ctx, key.ID, nil)
+
+// Child options filtered by parent
+parentID := options[0].ID
+childOptions, err := pageFetcher.GetPropertyOptions(ctx, key.ID, &parentID)
+```
+
+### PropertyKey Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ID` | `string` | Unique identifier |
+| `Name` | `string` | Display name |
+| `Slug` | `string` | URL-friendly identifier |
+| `Type` | `string` | `"select"` or `"multi-select"` |
+| `Options` | `[]PropertyOption` | Available options (when fetched inline) |
+
+## Complete Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    limitless "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+)
+
+func intPtr(i int) *int { return &i }
+
+func main() {
+    client := limitless.NewHttpClient()
+    pageFetcher := limitless.NewMarketPageFetcher(client)
+    ctx := context.Background()
+
+    // Browse the navigation tree
+    navigation, err := pageFetcher.GetNavigation(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Top-level categories: %d\n", len(navigation))
+
+    // Resolve a page
+    page, err := pageFetcher.GetMarketPageByPath(ctx, "/crypto")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("\nPage: %s\n", page.Name)
+
+    // Fetch markets with filters
+    result, err := pageFetcher.GetMarkets(ctx, page.ID, &limitless.MarketPageMarketsParams{
+        Limit:   intPtr(5),
+        Sort:    limitless.MarketPageSortNewest,
+        Filters: map[string]any{"ticker": []string{"btc", "eth"}},
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    for _, market := range result.Data {
+        fmt.Printf("  %s — %s\n", market.Slug, market.Title)
+    }
+
+    // Explore property keys
+    keys, err := pageFetcher.GetPropertyKeys(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+    for _, key := range keys {
+        fmt.Printf("\n%s (%s)\n", key.Name, key.Type)
+        options, _ := pageFetcher.GetPropertyOptions(ctx, key.ID, nil)
+        for i, opt := range options {
+            if i >= 5 {
+                break
+            }
+            fmt.Printf("  %s\n", opt.Label)
+        }
+    }
+}
+```

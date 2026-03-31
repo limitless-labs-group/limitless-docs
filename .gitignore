@@ -6,6 +6,7 @@ node_modules/
 # Reference materials (SDK repos are for reference only)
 limitless-sdk/
 limitless-exchange-ts-sdk/
+doc-reference/
 docs-reference/
 api-1.json
 *.dmg
