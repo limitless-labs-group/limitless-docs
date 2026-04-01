@@ -1,0 +1,99 @@
+---
+title: "API Tokens"
+description: "Manage scoped API tokens with the TypeScript SDK"
+---
+
+The `ApiTokenService` handles the partner self-service token lifecycle: checking capabilities, deriving tokens, listing active tokens, and revoking them.
+
+<Note>
+  Token derivation and capability queries require a **Privy identity token**. The SDK does not obtain this token for you — your application must authenticate the partner via Privy and pass the resulting token.
+</Note>
+
+## Access
+
+The service is available on the root `Client`:
+
+```typescript
+import { Client } from '@limitless-exchange/sdk';
+
+const client = new Client({
+  baseURL: 'https://api.limitless.exchange',
+});
+
+// Use client.apiTokens.*
+```
+
+## Get partner capabilities
+
+Check whether token management is enabled and which scopes are allowed.
+
+```typescript
+const capabilities = await client.apiTokens.getCapabilities(identityToken);
+
+console.log(capabilities.tokenManagementEnabled); // boolean
+console.log(capabilities.allowedScopes);          // e.g. ['trading', 'account_creation', 'delegated_signing']
+```
+
+## Derive a token
+
+Create a new scoped API token. The `secret` is returned once — store it securely.
+
+```typescript
+import { ScopeTrading, ScopeAccountCreation, ScopeDelegatedSigning } from '@limitless-exchange/sdk';
+
+const derived = await client.apiTokens.deriveToken(identityToken, {
+  label: 'production-bot',
+  scopes: [ScopeTrading, ScopeAccountCreation, ScopeDelegatedSigning],
+});
+
+// derived.tokenId  — used as lmts-api-key header
+// derived.secret   — base64-encoded HMAC secret (one-time)
+// derived.scopes   — granted scopes
+// derived.profile  — { id, account }
+```
+
+### Creating an HMAC-authenticated client
+
+After deriving a token, create a new `Client` with the HMAC credentials:
+
+```typescript
+const scopedClient = new Client({
+  baseURL: 'https://api.limitless.exchange',
+  hmacCredentials: {
+    tokenId: derived.tokenId,
+    secret: derived.secret,
+  },
+});
+```
+
+If `scopes` is omitted, the token defaults to `['trading']`. Requested scopes must be a subset of the partner's `allowedScopes`.
+
+## List active tokens
+
+Returns all non-revoked tokens for the authenticated partner.
+
+```typescript
+const tokens = await scopedClient.apiTokens.listTokens();
+
+for (const token of tokens) {
+  console.log(token.tokenId, token.label, token.scopes, token.lastUsedAt);
+}
+```
+
+## Revoke a token
+
+Immediately invalidates a token. This cannot be undone.
+
+```typescript
+const message = await scopedClient.apiTokens.revokeToken(derived.tokenId);
+```
+
+## Scope constants
+
+The SDK exports typed scope constants:
+
+| Constant | Value |
+|----------|-------|
+| `ScopeTrading` | `'trading'` |
+| `ScopeAccountCreation` | `'account_creation'` |
+| `ScopeDelegatedSigning` | `'delegated_signing'` |

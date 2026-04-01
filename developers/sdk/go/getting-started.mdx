@@ -124,14 +124,39 @@ The SDK authenticates using an API key passed via the `X-API-Key` header.
   Never hardcode API keys in source code or commit them to version control. Use environment variables or a secrets manager.
 </Warning>
 
+## Root Client
+
+The recommended entrypoint is the root `Client`, which composes all domain services (markets, portfolio, orders, API tokens, partner accounts, delegated orders):
+
+```go
+client := limitless.NewClient(
+    limitless.WithAPIKey("lmts_your_key_here"),
+)
+
+// client.Markets, client.Portfolio, client.Pages,
+// client.ApiTokens, client.PartnerAccounts, client.DelegatedOrders
+```
+
+For partner integrations using HMAC authentication:
+
+```go
+client := limitless.NewClient(
+    limitless.WithHMACCredentials(limitless.HMACCredentials{
+        TokenID: "your-token-id",
+        Secret:  "your-base64-secret",
+    }),
+)
+```
+
 ## HttpClient Options
 
-The `HttpClient` uses the functional options pattern. Pass any combination of options to `NewHttpClient()`:
+The `HttpClient` uses the functional options pattern. Pass any combination of options to `NewHttpClient()` or `NewClient()`:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `WithBaseURL(url)` | `string` | `https://api.limitless.exchange` | API base URL |
 | `WithAPIKey(key)` | `string` | Reads `LIMITLESS_API_KEY` env | API key for authentication |
+| `WithHMACCredentials(creds)` | `HMACCredentials` | -- | HMAC credentials for scoped API token auth (see [Programmatic API](/developers/programmatic-api)) |
 | `WithTimeout(d)` | `time.Duration` | `30s` | HTTP request timeout |
 | `WithMaxIdleConns(n)` | `int` | `50` | Maximum idle connections in the pool |
 | `WithIdleConnTimeout(d)` | `time.Duration` | `60s` | How long idle connections remain in the pool |
@@ -196,13 +221,19 @@ The SDK is open source. Contributions and issue reports are welcome.
   <Card title="Portfolio & Positions" icon="wallet" href="/developers/sdk/go/portfolio">
     Track your open positions and trading history.
   </Card>
+  <Card title="API Tokens" icon="shield-halved" href="/developers/sdk/go/api-tokens">
+    Derive, list, and revoke scoped HMAC tokens for partner integrations.
+  </Card>
+  <Card title="Partner Accounts" icon="users" href="/developers/sdk/go/partner-accounts">
+    Create sub-accounts with server wallets or EOA verification.
+  </Card>
+  <Card title="Delegated Orders" icon="user-check" href="/developers/sdk/go/delegated-orders">
+    Place orders on behalf of sub-accounts with server-side signing.
+  </Card>
   <Card title="WebSocket Streaming" icon="bolt" href="/developers/sdk/go/websocket">
     Subscribe to real-time orderbook and price updates.
   </Card>
   <Card title="Error Handling & Retry" icon="rotate" href="/developers/sdk/go/error-handling">
     Retry logic, error types, and debugging strategies.
-  </Card>
-  <Card title="API Reference" icon="book" href="/api-reference/introduction">
-    Full REST API endpoint documentation.
   </Card>
 </CardGroup>

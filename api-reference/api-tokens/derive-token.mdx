@@ -1,0 +1,28 @@
+---
+title: "Derive Scoped Token"
+openapi: "POST /auth/api-tokens/derive"
+---
+
+<Info>
+  Requires **Privy authentication** (Bearer token). HMAC and API key auth are not accepted for this endpoint.
+</Info>
+
+<Warning>
+  The `secret` field is returned **once** at creation time. Store it securely — it cannot be retrieved again.
+</Warning>
+
+### Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `trading` | Place and cancel orders. Default scope. Required for `delegated_signing`. |
+| `account_creation` | Create sub-account profiles under your partner account. |
+| `delegated_signing` | Server signs orders on behalf of sub-accounts via Privy server wallet. Requires `trading`. |
+
+If `scopes` is omitted from the request body, the token is created with `["trading"]` only.
+
+Requested scopes must be a subset of your partner's `allowedScopes` (see [Get Partner Capabilities](/api-reference/api-tokens/get-capabilities)).
+
+### Using the token
+
+After deriving a token, authenticate subsequent requests using HMAC signing with the returned `apiKey` (token ID) and `secret`. See [HMAC Request Signing](/developers/authentication#hmac-request-signing) for the signing protocol.

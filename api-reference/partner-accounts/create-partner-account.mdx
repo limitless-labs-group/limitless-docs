@@ -1,0 +1,45 @@
+---
+title: "Create Partner Sub-Account"
+openapi: "POST /profiles/partner-accounts"
+---
+
+<Info>
+  Requires **HMAC authentication** with the `account_creation` scope. API key auth and Privy auth are not accepted.
+</Info>
+
+Creates a new sub-account profile linked to the authenticated partner.
+
+### Server wallet mode
+
+Set `createServerWallet: true` to create a Privy server wallet for the sub-account. This enables [delegated signing](/developers/authentication#delegated-signing) — the partner can submit unsigned orders and the server signs them using the managed wallet.
+
+```json
+{
+  "displayName": "user-bob",
+  "createServerWallet": true
+}
+```
+
+### EOA mode
+
+Omit `createServerWallet` (or set it to `false`) to create an account for an externally-owned address. The end user manages their own keys and signs their own orders.
+
+EOA mode requires three additional headers for wallet ownership verification:
+
+| Header | Description |
+|--------|-------------|
+| `x-account` | Checksummed Ethereum address (EIP-55) |
+| `x-signing-message` | Hex-encoded signing message |
+| `x-signature` | Hex-encoded signature from the wallet |
+
+```json
+{
+  "displayName": "user-alice"
+}
+```
+
+### Constraints
+
+- `displayName` is optional (max 44 characters). Defaults to the wallet address if omitted.
+- Returns `409 Conflict` if a profile already exists for the target address.
+- Cannot create a sub-account for the partner's own address.

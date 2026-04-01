@@ -1,0 +1,67 @@
+---
+title: "Partner Accounts"
+description: "Create and manage sub-accounts with the Python SDK"
+---
+
+The `PartnerAccountService` creates sub-account profiles linked to the authenticated partner. Requires HMAC authentication with the `account_creation` scope.
+
+## Access
+
+```python
+from limitless_sdk import Client, HMACCredentials
+
+client = Client(
+    base_url="https://api.limitless.exchange",
+    hmac_credentials=HMACCredentials(token_id=token_id, secret=secret),
+)
+
+# Use client.partner_accounts.*
+```
+
+## Server wallet mode
+
+Creates a managed Privy wallet for the sub-account. Enables [delegated signing](/developers/programmatic-api#sub-account-modes) — the partner submits unsigned orders and the server signs them.
+
+```python
+from limitless_sdk import CreatePartnerAccountInput
+
+account = await client.partner_accounts.create_account(
+    CreatePartnerAccountInput(
+        display_name="user-alice",
+        create_server_wallet=True,
+    )
+)
+
+print(account.profile_id)  # numeric profile ID
+print(account.account)     # wallet address
+```
+
+<Note>
+  New server wallets need the backend allowance provisioning to complete before the first delegated trade. A short delay (a few seconds) is typical.
+</Note>
+
+## EOA mode
+
+Creates a profile for an externally-owned address. The end user manages their own keys and signs orders themselves.
+
+EOA mode requires wallet ownership verification headers:
+
+```python
+from limitless_sdk import CreatePartnerAccountInput, CreatePartnerAccountEOAHeaders
+
+account = await client.partner_accounts.create_account(
+    CreatePartnerAccountInput(display_name="user-bob"),
+    eoa_headers=CreatePartnerAccountEOAHeaders(
+        account="0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+        signing_message="0x...",
+        signature="0x...",
+    ),
+)
+```
+
+## Validation
+
+- `display_name` is optional, max 44 characters. Defaults to the wallet address if omitted.
+- Returns `409 Conflict` if a profile already exists for the target address.
+- Cannot create a sub-account for the partner's own address.
+- The SDK validates `display_name` length locally before sending the request.

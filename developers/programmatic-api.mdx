@@ -1,0 +1,183 @@
+---
+title: "Programmatic API"
+description: "Partner integrations with scoped API tokens, sub-account management, and delegated signing"
+---
+
+The Programmatic API enables partners to build integrations that create and manage user accounts, place orders on behalf of users, and operate with fine-grained access control — all through HMAC-authenticated API tokens with scoped permissions.
+
+<Warning>
+  HMAC credentials contain a secret key and must only be used in **backend or BFF** environments. Never expose them in browser-side code.
+</Warning>
+
+## Overview
+
+The programmatic API introduces three capabilities:
+
+| Capability | Description |
+|------------|-------------|
+| **Scoped API tokens** | HMAC-SHA256 authenticated tokens with granular scopes (`trading`, `account_creation`, `delegated_signing`) |
+| **Partner sub-accounts** | Create and manage user profiles linked to your partner account |
+| **Delegated signing** | Submit orders without end users managing private keys — the server signs via a managed wallet |
+
+## Partner lifecycle
+
+<Steps>
+
+<Step title="Bootstrap your partner account">
+  Create a standard Limitless account by logging in with your wallet at [limitless.exchange](https://limitless.exchange). This gives you a `profileId` and wallet address.
+</Step>
+
+<Step title="Get partner capabilities enabled">
+  Contact [hey@limitless.network](mailto:hey@limitless.network) to have your partner capabilities configured. The admin team will enable token management and set your allowed scopes.
+</Step>
+
+<Step title="Derive a scoped API token">
+  Authenticate with your Privy identity token and call `POST /auth/api-tokens/derive` to create a scoped token. The response includes a `tokenId` and `secret` — store the secret securely, it is only returned once.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { Client, HMACCredentials } from '@limitless-exchange/sdk';
+
+const client = new Client({
+  baseURL: 'https://api.limitless.exchange',
+});
+
+const derived = await client.apiTokens.deriveToken(identityToken, {
+  label: 'my-trading-bot',
+  scopes: ['trading', 'account_creation', 'delegated_signing'],
+});
+
+const scopedClient = new Client({
+  baseURL: 'https://api.limitless.exchange',
+  hmacCredentials: {
+    tokenId: derived.tokenId,
+    secret: derived.secret,
+  },
+});
+```
+
+```python Python
+from limitless_sdk import Client, HMACCredentials, DeriveApiTokenInput
+
+client = Client(base_url="https://api.limitless.exchange")
+
+derived = await client.api_tokens.derive_token(
+    identity_token,
+    DeriveApiTokenInput(
+        label="my-trading-bot",
+        scopes=["trading", "account_creation", "delegated_signing"],
+    ),
+)
+
+scoped_client = Client(
+    base_url="https://api.limitless.exchange",
+    hmac_credentials=HMACCredentials(
+        token_id=derived.token_id,
+        secret=derived.secret,
+    ),
+)
+```
+
+```go Go
+import "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+
+client := limitless.NewClient()
+
+derived, err := client.ApiTokens.DeriveToken(ctx, identityToken, limitless.DeriveApiTokenInput{
+    Label:  "my-trading-bot",
+    Scopes: []string{"trading", "account_creation", "delegated_signing"},
+})
+
+scopedClient := limitless.NewClient(
+    limitless.WithHMACCredentials(limitless.HMACCredentials{
+        TokenID: derived.TokenID,
+        Secret:  derived.Secret,
+    }),
+)
+```
+
+</CodeGroup>
+</Step>
+
+<Step title="Create sub-accounts">
+  Use the scoped token to create sub-accounts for your end users. Choose server wallet mode for Web2 integrations (delegated signing) or EOA mode for Web3 users who manage their own keys.
+
+```typescript
+const account = await scopedClient.partnerAccounts.createAccount({
+  displayName: 'user-alice',
+  createServerWallet: true,
+});
+// account.profileId, account.account
+```
+</Step>
+
+<Step title="Trade on behalf of sub-accounts">
+  With the `delegated_signing` scope and server wallet accounts, submit unsigned orders — the server signs them automatically.
+
+```typescript
+const order = await scopedClient.delegatedOrders.createOrder({
+  marketSlug: 'btc-100k',
+  orderType: 'GTC',
+  onBehalfOf: account.profileId,
+  args: {
+    tokenId: market.tokens.yes,
+    side: 0, // BUY
+    price: 0.55,
+    size: 10,
+  },
+});
+```
+</Step>
+
+</Steps>
+
+## Scopes
+
+| Scope | Description | Self-service |
+|-------|-------------|--------------|
+| `trading` | Place and cancel orders. Default scope. Required base for `delegated_signing`. | Yes |
+| `account_creation` | Create sub-account profiles linked to the partner. | Yes |
+| `delegated_signing` | Server signs orders on behalf of sub-accounts via managed wallets. Must be paired with `trading`. | Yes |
+| `admin` | Access admin-protected endpoints. | No (admin-provisioned only) |
+
+## Sub-account modes
+
+### Server wallet (Web2 partners)
+
+Set `createServerWallet: true` when creating a sub-account. The server provisions a managed Privy wallet and links it to the profile. The partner submits unsigned orders and the server signs them via the managed wallet.
+
+### EOA (Web3 partners)
+
+Omit `createServerWallet` or set it to `false`. The partner provides wallet ownership proof via `x-account`, `x-signing-message`, and `x-signature` headers. The end user signs their own orders with their private key.
+
+## HMAC authentication
+
+All day-to-day programmatic API calls use HMAC-SHA256 request signing. See the [Authentication](/developers/authentication#hmac-request-signing) page for the signing protocol, canonical message format, and code examples.
+
+## API endpoints
+
+| Endpoint | Auth | Description |
+|----------|------|-------------|
+| [`GET /auth/api-tokens/capabilities`](/api-reference/api-tokens/get-capabilities) | Privy | Check partner capability configuration |
+| [`POST /auth/api-tokens/derive`](/api-reference/api-tokens/derive-token) | Privy | Create a scoped API token |
+| [`GET /auth/api-tokens`](/api-reference/api-tokens/list-tokens) | Any | List active tokens |
+| [`DELETE /auth/api-tokens/{tokenId}`](/api-reference/api-tokens/revoke-token) | Any | Revoke a token |
+| [`POST /profiles/partner-accounts`](/api-reference/partner-accounts/create-partner-account) | HMAC | Create a sub-account |
+| [`POST /orders`](/api-reference/trading/create-order) | HMAC | Place orders (with optional delegated signing) |
+
+## SDK support
+
+All three official SDKs provide built-in support for the programmatic API:
+
+<CardGroup cols={3}>
+  <Card title="TypeScript" icon="js" href="/developers/sdk/typescript/api-tokens">
+    `Client` with `hmacCredentials`, `ApiTokenService`, `PartnerAccountService`, `DelegatedOrderService`
+  </Card>
+  <Card title="Python" icon="python" href="/developers/sdk/python/api-tokens">
+    `Client` with `hmac_credentials`, `api_tokens`, `partner_accounts`, `delegated_orders`
+  </Card>
+  <Card title="Go" icon="golang" href="/developers/sdk/go/api-tokens">
+    `Client` with `WithHMACCredentials`, `ApiTokens`, `PartnerAccounts`, `DelegatedOrders`
+  </Card>
+</CardGroup>

@@ -1,0 +1,69 @@
+---
+title: "Partner Accounts"
+description: "Create and manage sub-accounts with the TypeScript SDK"
+---
+
+The `PartnerAccountService` creates sub-account profiles linked to the authenticated partner. Requires HMAC authentication with the `account_creation` scope.
+
+## Access
+
+```typescript
+import { Client } from '@limitless-exchange/sdk';
+
+const client = new Client({
+  baseURL: 'https://api.limitless.exchange',
+  hmacCredentials: { tokenId, secret },
+});
+
+// Use client.partnerAccounts.*
+```
+
+## Server wallet mode
+
+Creates a managed Privy wallet for the sub-account. Enables [delegated signing](/developers/programmatic-api#sub-account-modes) — the partner submits unsigned orders and the server signs them.
+
+```typescript
+const account = await client.partnerAccounts.createAccount({
+  displayName: 'user-alice',
+  createServerWallet: true,
+});
+
+console.log(account.profileId); // numeric profile ID
+console.log(account.account);   // wallet address
+```
+
+<Note>
+  New server wallets need the backend allowance provisioning to complete before the first delegated trade. A short delay (a few seconds) is typical.
+</Note>
+
+## EOA mode
+
+Creates a profile for an externally-owned address. The end user manages their own keys and signs orders themselves.
+
+EOA mode requires wallet ownership verification headers:
+
+```typescript
+const account = await client.partnerAccounts.createAccount(
+  {
+    displayName: 'user-bob',
+  },
+  {
+    account: '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed',
+    signingMessage: '0x...',
+    signature: '0x...',
+  },
+);
+```
+
+| Header | Description |
+|--------|-------------|
+| `account` | Checksummed Ethereum address (EIP-55) |
+| `signingMessage` | Hex-encoded signing message |
+| `signature` | Hex-encoded signature from the wallet |
+
+## Validation
+
+- `displayName` is optional, max 44 characters. Defaults to the wallet address if omitted.
+- Returns `409 Conflict` if a profile already exists for the target address.
+- Cannot create a sub-account for the partner's own address.
+- The SDK validates `displayName` length locally before sending the request.

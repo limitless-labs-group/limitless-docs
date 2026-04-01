@@ -69,6 +69,7 @@
               "developers/introduction",
               "developers/migrate-from-polymarket",
               "developers/authentication",
+              "developers/programmatic-api",
               "developers/venue-system",
               "developers/eip712-signing"
             ]
@@ -90,6 +91,9 @@
               "developers/sdk/typescript/market-pages",
               "developers/sdk/typescript/orders",
               "developers/sdk/typescript/portfolio",
+              "developers/sdk/typescript/api-tokens",
+              "developers/sdk/typescript/partner-accounts",
+              "developers/sdk/typescript/delegated-orders",
               "developers/sdk/typescript/websocket",
               "developers/sdk/typescript/error-handling"
             ]
@@ -102,6 +106,9 @@
               "developers/sdk/python/market-pages",
               "developers/sdk/python/orders",
               "developers/sdk/python/portfolio",
+              "developers/sdk/python/api-tokens",
+              "developers/sdk/python/partner-accounts",
+              "developers/sdk/python/delegated-orders",
               "developers/sdk/python/websocket",
               "developers/sdk/python/error-handling"
             ]
@@ -114,6 +121,9 @@
               "developers/sdk/go/market-pages",
               "developers/sdk/go/orders",
               "developers/sdk/go/portfolio",
+              "developers/sdk/go/api-tokens",
+              "developers/sdk/go/partner-accounts",
+              "developers/sdk/go/delegated-orders",
               "developers/sdk/go/websocket",
               "developers/sdk/go/error-handling"
             ]
@@ -193,6 +203,21 @@
               "api-reference/navigation/list-property-keys",
               "api-reference/navigation/get-property-key",
               "api-reference/navigation/list-property-options"
+            ]
+          },
+          {
+            "group": "API Tokens",
+            "pages": [
+              "api-reference/api-tokens/get-capabilities",
+              "api-reference/api-tokens/derive-token",
+              "api-reference/api-tokens/list-tokens",
+              "api-reference/api-tokens/revoke-token"
+            ]
+          },
+          {
+            "group": "Partner Accounts",
+            "pages": [
+              "api-reference/partner-accounts/create-partner-account"
             ]
           },
           {

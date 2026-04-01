@@ -107,21 +107,47 @@ The SDK authenticates using an API key passed via the `X-API-Key` header.
   Never hardcode API keys in source code or commit them to version control. Use environment variables or a secrets manager.
 </Warning>
 
-## HttpClient Constructor
+## Client constructor
 
-The `HttpClient` accepts the following parameters:
+The recommended entrypoint is the root `Client` class, which composes all domain services (markets, portfolio, orders, API tokens, partner accounts, delegated orders):
+
+```python
+from limitless_sdk import Client
+
+client = Client(base_url="https://api.limitless.exchange")
+```
+
+For partner integrations using HMAC authentication:
+
+```python
+from limitless_sdk import Client, HMACCredentials
+
+client = Client(
+    base_url="https://api.limitless.exchange",
+    hmac_credentials=HMACCredentials(
+        token_id="your-token-id",
+        secret="your-base64-secret",
+    ),
+)
+```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `base_url` | `str` | `https://api.limitless.exchange` | API base URL |
 | `api_key` | `str \| None` | `None` (reads `LIMITLESS_API_KEY` env) | API key for authentication |
+| `hmac_credentials` | `HMACCredentials \| None` | `None` | HMAC credentials for scoped API token auth (see [Programmatic API](/developers/programmatic-api)) |
 | `additional_headers` | `dict \| None` | `None` | Extra headers merged into every request |
 
+### HttpClient (lower-level)
+
+You can also use `HttpClient` directly for more control:
+
 ```python
+from limitless_sdk.api import HttpClient
+
 http_client = HttpClient(
     base_url="https://api.limitless.exchange",
     api_key="lmts_your_key_here",
-    additional_headers={"X-Custom-Header": "value"},
 )
 ```
 
@@ -179,13 +205,19 @@ The SDK is open source. Contributions and issue reports are welcome.
   <Card title="Portfolio & Positions" icon="wallet" href="/developers/sdk/python/portfolio">
     Track your open positions and trading history.
   </Card>
+  <Card title="API Tokens" icon="shield-halved" href="/developers/sdk/python/api-tokens">
+    Derive, list, and revoke scoped HMAC tokens for partner integrations.
+  </Card>
+  <Card title="Partner Accounts" icon="users" href="/developers/sdk/python/partner-accounts">
+    Create sub-accounts with server wallets or EOA verification.
+  </Card>
+  <Card title="Delegated Orders" icon="user-check" href="/developers/sdk/python/delegated-orders">
+    Place orders on behalf of sub-accounts with server-side signing.
+  </Card>
   <Card title="WebSocket Streaming" icon="bolt" href="/developers/sdk/python/websocket">
     Subscribe to real-time orderbook and price updates.
   </Card>
   <Card title="Error Handling & Retry" icon="rotate" href="/developers/sdk/python/error-handling">
     Retry logic, error types, and debugging strategies.
-  </Card>
-  <Card title="API Reference" icon="book" href="/api-reference/introduction">
-    Full REST API endpoint documentation.
   </Card>
 </CardGroup>

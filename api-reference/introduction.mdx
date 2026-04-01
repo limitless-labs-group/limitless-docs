@@ -13,7 +13,12 @@ Interactive API explorer (Scalar): [https://api.limitless.exchange/api-v1](https
 
 ## Authentication
 
-Most endpoints require the `X-API-Key` header. Generate a key at [limitless.exchange](https://limitless.exchange) → profile menu → **Api keys**.
+Most endpoints require authentication via one of two methods:
+
+| Method | Headers | Use case |
+|--------|---------|----------|
+| **API Key** | `X-API-Key: lmts_...` | Individual traders, bots, data access |
+| **Scoped API Token (HMAC)** | `lmts-api-key`, `lmts-timestamp`, `lmts-signature` | Partner integrations, delegated signing, sub-account management |
 
 ```bash
 curl -H "X-API-Key: lmts_your_key_here" \
@@ -24,19 +29,25 @@ curl -H "X-API-Key: lmts_your_key_here" \
   Public endpoints like market browsing and orderbook data do **not** require authentication.
 </Note>
 
-See the [Authentication guide](/developers/authentication) for full details.
+See the [Authentication guide](/developers/authentication) for API keys and HMAC signing details, or the [Programmatic API guide](/developers/programmatic-api) for the full partner integration workflow.
 
 ## Endpoint Groups
 
 <CardGroup cols={2}>
-  <Card title="Authentication" icon="key" href="/api-reference/auth/get-signing-message">
-    Get signing messages, login/logout, verify sessions, and manage API keys.
+  <Card title="Authentication" icon="key" href="/api-reference/auth/create-api-key">
+    Manage API keys, verify sessions, and authentication flows.
+  </Card>
+  <Card title="API Tokens" icon="shield-halved" href="/api-reference/api-tokens/derive-token">
+    Scoped API token management for partner integrations — derive, list, and revoke HMAC-authenticated tokens.
   </Card>
   <Card title="Markets" icon="chart-line" href="/api-reference/markets/browse-active">
     Browse active markets, search, get details and feed events.
   </Card>
   <Card title="Trading" icon="arrow-right-arrow-left" href="/api-reference/trading/create-order">
     Create and cancel orders, batch order status, orderbook, historical prices, and user orders.
+  </Card>
+  <Card title="Partner Accounts" icon="users" href="/api-reference/partner-accounts/create-partner-account">
+    Create and manage sub-accounts for partner integrations.
   </Card>
   <Card title="Portfolio" icon="wallet" href="/api-reference/portfolio/positions">
     Positions, trades, PnL chart, history, points, and allowance.

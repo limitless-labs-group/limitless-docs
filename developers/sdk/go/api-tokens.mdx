@@ -1,0 +1,103 @@
+---
+title: "API Tokens"
+description: "Manage scoped API tokens with the Go SDK"
+---
+
+The `ApiTokenService` handles the partner self-service token lifecycle: checking capabilities, deriving tokens, listing active tokens, and revoking them.
+
+<Note>
+  Token derivation and capability queries require a **Privy identity token**. The SDK does not obtain this token for you — your application must authenticate the partner via Privy and pass the resulting token.
+</Note>
+
+## Access
+
+The service is available on the root `Client`:
+
+```go
+import "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+
+client := limitless.NewClient()
+
+// Use client.ApiTokens.*
+```
+
+## Get partner capabilities
+
+Check whether token management is enabled and which scopes are allowed.
+
+```go
+capabilities, err := client.ApiTokens.GetCapabilities(ctx, identityToken)
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(capabilities.TokenManagementEnabled)
+fmt.Println(capabilities.AllowedScopes)
+```
+
+## Derive a token
+
+Create a new scoped API token. The `Secret` is returned once — store it securely.
+
+```go
+derived, err := client.ApiTokens.DeriveToken(ctx, identityToken, limitless.DeriveApiTokenInput{
+    Label:  "production-bot",
+    Scopes: []string{limitless.ScopeTrading, limitless.ScopeAccountCreation, limitless.ScopeDelegatedSigning},
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+// derived.TokenID  — used as lmts-api-key header
+// derived.Secret   — base64-encoded HMAC secret (one-time)
+// derived.Scopes   — granted scopes
+// derived.Profile  — { ID, Account }
+```
+
+### Creating an HMAC-authenticated client
+
+After deriving a token, create a new `Client` with the HMAC credentials:
+
+```go
+scopedClient := limitless.NewClient(
+    limitless.WithHMACCredentials(limitless.HMACCredentials{
+        TokenID: derived.TokenID,
+        Secret:  derived.Secret,
+    }),
+)
+```
+
+If `Scopes` is omitted, the token defaults to `["trading"]`. Requested scopes must be a subset of the partner's `AllowedScopes`.
+
+## List active tokens
+
+Returns all non-revoked tokens for the authenticated partner.
+
+```go
+tokens, err := scopedClient.ApiTokens.ListTokens(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, token := range tokens {
+    fmt.Println(token.TokenID, token.Label, token.Scopes, token.LastUsedAt)
+}
+```
+
+## Revoke a token
+
+Immediately invalidates a token. This cannot be undone.
+
+```go
+message, err := scopedClient.ApiTokens.RevokeToken(ctx, derived.TokenID)
+```
+
+## Scope constants
+
+The SDK exports typed scope constants:
+
+| Constant | Value |
+|----------|-------|
+| `ScopeTrading` | `"trading"` |
+| `ScopeAccountCreation` | `"account_creation"` |
+| `ScopeDelegatedSigning` | `"delegated_signing"` |

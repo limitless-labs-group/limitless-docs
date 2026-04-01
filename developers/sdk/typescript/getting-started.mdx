@@ -97,17 +97,27 @@ const wallet = new ethers.Wallet(process.env.PRIVATE_KEY!);
 | `LIMITLESS_API_KEY` | For authenticated endpoints | Auto-loaded by the SDK. Generate at [limitless.exchange](https://limitless.exchange) under profile menu. |
 | `PRIVATE_KEY` | For order signing | Ethereum private key used for EIP-712 order signatures. Never commit to version control. |
 
-## HttpClient Constructor
+## Client constructor
 
-The `HttpClient` accepts the following options:
+The recommended entrypoint is the root `Client` class, which composes all domain services (markets, portfolio, orders, API tokens, partner accounts, delegated orders):
 
 ```typescript
-const httpClient = new HttpClient({
+import { Client } from '@limitless-exchange/sdk';
+
+const client = new Client({
   baseURL: 'https://api.limitless.exchange',
-  apiKey: 'lmts_...',         // Optional: auto-reads LIMITLESS_API_KEY from env
-  timeout: 30_000,            // Optional: request timeout in ms (default: 30000)
-  additionalHeaders: {        // Optional: extra headers for every request
-    'X-Custom-Header': 'value',
+  apiKey: 'lmts_...',
+});
+```
+
+For partner integrations using HMAC authentication:
+
+```typescript
+const client = new Client({
+  baseURL: 'https://api.limitless.exchange',
+  hmacCredentials: {
+    tokenId: 'your-token-id',
+    secret: 'your-base64-secret',
   },
 });
 ```
@@ -116,8 +126,22 @@ const httpClient = new HttpClient({
 |--------|------|---------|-------------|
 | `baseURL` | `string` | -- | API base URL |
 | `apiKey` | `string` | `process.env.LIMITLESS_API_KEY` | API key for authentication |
+| `hmacCredentials` | `{ tokenId, secret }` | -- | HMAC credentials for scoped API token auth (see [Programmatic API](/developers/programmatic-api)) |
 | `timeout` | `number` | `30000` | Request timeout in milliseconds |
 | `additionalHeaders` | `Record<string, string>` | `{}` | Additional headers sent with every request |
+
+### HttpClient (lower-level)
+
+You can also use `HttpClient` directly for more control:
+
+```typescript
+import { HttpClient } from '@limitless-exchange/sdk';
+
+const httpClient = new HttpClient({
+  baseURL: 'https://api.limitless.exchange',
+  apiKey: 'lmts_...',
+});
+```
 
 ## What You Can Build
 
@@ -133,6 +157,15 @@ const httpClient = new HttpClient({
   </Card>
   <Card title="Portfolio and Positions" icon="wallet" href="/developers/sdk/typescript/portfolio">
     Track CLOB and AMM positions, PnL, and trade history.
+  </Card>
+  <Card title="API Tokens" icon="shield-halved" href="/developers/sdk/typescript/api-tokens">
+    Derive, list, and revoke scoped HMAC tokens for partner integrations.
+  </Card>
+  <Card title="Partner Accounts" icon="users" href="/developers/sdk/typescript/partner-accounts">
+    Create sub-accounts with server wallets or EOA verification.
+  </Card>
+  <Card title="Delegated Orders" icon="user-check" href="/developers/sdk/typescript/delegated-orders">
+    Place orders on behalf of sub-accounts with server-side signing.
   </Card>
   <Card title="WebSocket Streaming" icon="plug" href="/developers/sdk/typescript/websocket">
     Real-time orderbook, price, position, and transaction events.

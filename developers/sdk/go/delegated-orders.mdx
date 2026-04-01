@@ -1,0 +1,78 @@
+---
+title: "Delegated Orders"
+description: "Place orders on behalf of sub-accounts with the Go SDK"
+---
+
+The `DelegatedOrderService` enables partners with the `delegated_signing` scope to place and cancel orders on behalf of their sub-accounts. The server signs orders using the sub-account's managed Privy wallet — no private key management is needed on the partner side.
+
+<Warning>
+  Delegated signing requires a sub-account created with `CreateServerWallet: true`. EOA sub-accounts sign their own orders.
+</Warning>
+
+## Access
+
+```go
+import "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+
+client := limitless.NewClient(
+    limitless.WithHMACCredentials(limitless.HMACCredentials{
+        TokenID: tokenID,
+        Secret:  secret,
+    }),
+)
+
+// Use client.DelegatedOrders.*
+```
+
+## Create a delegated order
+
+Builds an unsigned order locally and submits it to `POST /orders` with the `OnBehalfOf` profile ID. The server signs the order via the sub-account's managed wallet.
+
+```go
+response, err := client.DelegatedOrders.CreateOrder(ctx, limitless.CreateDelegatedOrderParams{
+    MarketSlug:  "btc-100k",
+    OrderType:   limitless.OrderTypeGTC,
+    OnBehalfOf:  partnerAccount.ProfileID,
+    TokenID:     market.Tokens.Yes,
+    Side:        limitless.SideBuy,
+    Price:       0.55,
+    Size:        10,
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(response.Order.ID)
+```
+
+## Cancel an order
+
+```go
+message, err := client.DelegatedOrders.Cancel(ctx, orderID)
+```
+
+### Cancel on behalf of a sub-account
+
+```go
+message, err := client.DelegatedOrders.CancelOnBehalfOf(ctx, orderID, partnerAccount.ProfileID)
+```
+
+## Cancel all orders in a market
+
+```go
+message, err := client.DelegatedOrders.CancelAll(ctx, marketSlug)
+```
+
+### Cancel all on behalf of a sub-account
+
+```go
+message, err := client.DelegatedOrders.CancelAllOnBehalfOf(ctx, marketSlug, partnerAccount.ProfileID)
+```
+
+## How it works
+
+1. The SDK builds an unsigned order locally with a zero verifying address and default fee rate (300 bps)
+2. The order is posted to `POST /orders` with `OnBehalfOf` and `OwnerID` set to the sub-account's profile ID
+3. The server detects the `delegated_signing` scope and missing signature
+4. The server looks up the sub-account's server wallet, builds EIP-712 typed data, and signs via Privy
+5. The signed order is submitted to the CLOB engine

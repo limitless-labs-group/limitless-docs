@@ -1,0 +1,66 @@
+---
+title: "Partner Accounts"
+description: "Create and manage sub-accounts with the Go SDK"
+---
+
+The `PartnerAccountService` creates sub-account profiles linked to the authenticated partner. Requires HMAC authentication with the `account_creation` scope.
+
+## Access
+
+```go
+import "github.com/limitless-labs-group/limitless-exchange-go-sdk/limitless"
+
+client := limitless.NewClient(
+    limitless.WithHMACCredentials(limitless.HMACCredentials{
+        TokenID: tokenID,
+        Secret:  secret,
+    }),
+)
+
+// Use client.PartnerAccounts.*
+```
+
+## Server wallet mode
+
+Creates a managed Privy wallet for the sub-account. Enables [delegated signing](/developers/programmatic-api#sub-account-modes) — the partner submits unsigned orders and the server signs them.
+
+```go
+createServerWallet := true
+account, err := client.PartnerAccounts.CreateAccount(ctx, limitless.CreatePartnerAccountInput{
+    DisplayName:        "user-alice",
+    CreateServerWallet: &createServerWallet,
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(account.ProfileID)
+fmt.Println(account.Account)
+```
+
+<Note>
+  New server wallets need the backend allowance provisioning to complete before the first delegated trade. A short delay (a few seconds) is typical.
+</Note>
+
+## EOA mode
+
+Creates a profile for an externally-owned address. The end user manages their own keys and signs orders themselves.
+
+EOA mode requires wallet ownership verification headers:
+
+```go
+account, err := client.PartnerAccounts.CreateAccount(ctx, limitless.CreatePartnerAccountInput{
+    DisplayName: "user-bob",
+}, limitless.CreatePartnerAccountEOAHeaders{
+    Account:        "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+    SigningMessage: "0x...",
+    Signature:      "0x...",
+})
+```
+
+## Validation
+
+- `DisplayName` is optional, max 44 characters. Defaults to the wallet address if omitted.
+- Returns `409 Conflict` if a profile already exists for the target address.
+- Cannot create a sub-account for the partner's own address.
+- The SDK validates `DisplayName` length locally before sending the request.

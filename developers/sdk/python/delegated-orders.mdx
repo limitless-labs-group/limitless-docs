@@ -1,0 +1,87 @@
+---
+title: "Delegated Orders"
+description: "Place orders on behalf of sub-accounts with the Python SDK"
+---
+
+The `DelegatedOrderService` enables partners with the `delegated_signing` scope to place and cancel orders on behalf of their sub-accounts. The server signs orders using the sub-account's managed Privy wallet — no private key management is needed on the partner side.
+
+<Warning>
+  Delegated signing requires a sub-account created with `create_server_wallet=True`. EOA sub-accounts sign their own orders.
+</Warning>
+
+## Access
+
+```python
+from limitless_sdk import Client, HMACCredentials
+
+client = Client(
+    base_url="https://api.limitless.exchange",
+    hmac_credentials=HMACCredentials(token_id=token_id, secret=secret),
+)
+
+# Use client.delegated_orders.*
+```
+
+## Create a delegated order
+
+Builds an unsigned order and submits it to `POST /orders` with the `on_behalf_of` profile ID. The server signs the order via the sub-account's managed wallet.
+
+```python
+from limitless_sdk import OrderType, Side
+
+response = await client.delegated_orders.create_order(
+    token_id=market.tokens.yes,
+    side=Side.BUY,
+    order_type=OrderType.GTC,
+    market_slug="btc-100k",
+    on_behalf_of=partner_account.profile_id,
+    price=0.55,
+    size=10,
+)
+
+print(response.order.id)
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `token_id` | `str` | Position token ID (YES or NO) from market data |
+| `side` | `Side` | `Side.BUY` or `Side.SELL` |
+| `order_type` | `OrderType` | `OrderType.GTC` or `OrderType.FOK` |
+| `market_slug` | `str` | Market identifier |
+| `on_behalf_of` | `int` | Profile ID of the sub-account |
+| `price` | `float` | Price between 0 and 1 |
+| `size` | `float` | Number of contracts |
+
+## Cancel an order
+
+```python
+message = await client.delegated_orders.cancel(order_id)
+```
+
+### Cancel on behalf of a sub-account
+
+```python
+message = await client.delegated_orders.cancel_on_behalf_of(order_id, partner_account.profile_id)
+```
+
+## Cancel all orders in a market
+
+```python
+message = await client.delegated_orders.cancel_all(market_slug)
+```
+
+### Cancel all on behalf of a sub-account
+
+```python
+message = await client.delegated_orders.cancel_all_on_behalf_of(market_slug, partner_account.profile_id)
+```
+
+## How it works
+
+1. The SDK builds an unsigned order locally with a zero verifying address
+2. The order is posted to `POST /orders` with `on_behalf_of` and `owner_id` set to the sub-account's profile ID
+3. The server detects the `delegated_signing` scope and missing signature
+4. The server looks up the sub-account's server wallet, builds EIP-712 typed data, and signs via Privy
+5. The signed order is submitted to the CLOB engine

@@ -1,0 +1,12 @@
+---
+title: "Get Partner Capabilities"
+openapi: "GET /auth/api-tokens/capabilities"
+---
+
+<Info>
+  Requires **Privy authentication** (Bearer token). HMAC and API key auth are not accepted for this endpoint.
+</Info>
+
+This endpoint returns whether token management is enabled for your partner account and which scopes you can request when deriving tokens.
+
+If no capability row exists for your profile, `tokenManagementEnabled` defaults to `false` and `allowedScopes` defaults to an empty array. Contact [hey@limitless.network](mailto:hey@limitless.network) to get partner capabilities enabled.

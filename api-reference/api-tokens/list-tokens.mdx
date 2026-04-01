@@ -1,0 +1,8 @@
+---
+title: "List Active Tokens"
+openapi: "GET /auth/api-tokens"
+---
+
+Returns all active (non-revoked) API tokens for the authenticated partner. Token secrets are never included in the response.
+
+Requires token management to be enabled for the partner (see [Get Partner Capabilities](/api-reference/api-tokens/get-capabilities)).

@@ -36,6 +36,14 @@
     {
       "name": "Portfolio",
       "description": "Position tracking, trade history, and performance"
+    },
+    {
+      "name": "API Tokens",
+      "description": "Scoped API token management for partner integrations"
+    },
+    {
+      "name": "Partner Accounts",
+      "description": "Sub-account creation for partner integrations"
     }
   ],
   "paths": {
@@ -2300,6 +2308,258 @@
           "Portfolio"
         ]
       }
+    },
+    "/auth/api-tokens/capabilities": {
+      "get": {
+        "summary": "Get partner capabilities",
+        "description": "Returns the partner capability configuration for the authenticated user, including whether token management is enabled and which scopes are allowed for self-service token derivation. Requires Privy authentication (Bearer token).",
+        "operationId": "ApiTokenController_getCapabilities",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Partner capability configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerCapabilitiesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Requires Privy authentication"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "tags": [
+          "API Tokens"
+        ]
+      }
+    },
+    "/auth/api-tokens/derive": {
+      "post": {
+        "summary": "Derive scoped API token",
+        "description": "Creates a new scoped API token for the authenticated partner. Requires Privy authentication (Bearer token). The token secret is returned once at creation — store it securely. Requested scopes must be a subset of the partner's allowed scopes.",
+        "operationId": "ApiTokenController_deriveToken",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeriveApiTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Token created successfully. The secret is only returned once.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeriveApiTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid scopes or profile not found"
+          },
+          "401": {
+            "description": "Requires Privy authentication"
+          },
+          "403": {
+            "description": "Token management not enabled or requested scopes not allowed for this partner"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "tags": [
+          "API Tokens"
+        ]
+      }
+    },
+    "/auth/api-tokens": {
+      "get": {
+        "summary": "List active tokens",
+        "description": "Lists all active (non-revoked) API tokens for the authenticated partner. Requires token management to be enabled for the partner.",
+        "operationId": "ApiTokenController_listTokens",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of active tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiTokenListItem"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Token management not enabled for this partner"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "HmacAuth": []
+          }
+        ],
+        "tags": [
+          "API Tokens"
+        ]
+      }
+    },
+    "/auth/api-tokens/{tokenId}": {
+      "delete": {
+        "summary": "Revoke token",
+        "description": "Revokes an active API token. The token becomes immediately unusable. Requires token management to be enabled for the partner.",
+        "operationId": "ApiTokenController_revokeToken",
+        "parameters": [
+          {
+            "name": "tokenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The token ID to revoke"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Token revoked successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "API token revoked successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Token not found or already revoked"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Token management not enabled for this partner"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "HmacAuth": []
+          }
+        ],
+        "tags": [
+          "API Tokens"
+        ]
+      }
+    },
+    "/profiles/partner-accounts": {
+      "post": {
+        "summary": "Create partner sub-account",
+        "description": "Creates a new sub-account linked to the authenticated partner. Requires HMAC authentication with the `account_creation` scope.\n\n**Server wallet mode** (`createServerWallet: true`): Creates a Privy server wallet and profile. The partner can then submit orders on behalf of this account using delegated signing.\n\n**EOA mode** (default): Requires wallet ownership verification via `x-account`, `x-signing-message`, and `x-signature` headers. The end user signs their own orders.",
+        "operationId": "ProfileController_createPartnerAccount",
+        "parameters": [
+          {
+            "name": "x-account",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "EOA mode only. Checksummed Ethereum address of the sub-account wallet."
+          },
+          {
+            "name": "x-signing-message",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "EOA mode only. Hex-encoded signing message."
+          },
+          {
+            "name": "x-signature",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "EOA mode only. Hex-encoded signature from the sub-account wallet."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePartnerAccountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sub-account created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatePartnerAccountResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot create a partner account for the partner's own address, or profile creation failed"
+          },
+          "401": {
+            "description": "Wallet ownership verification failed (EOA mode)"
+          },
+          "403": {
+            "description": "Requires apiToken auth with account_creation scope"
+          },
+          "409": {
+            "description": "A profile already exists for this address"
+          }
+        },
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "tags": [
+          "Partner Accounts"
+        ]
+      }
     }
   },
   "components": {
@@ -4368,6 +4628,165 @@
           }
         },
         "required": ["results"]
+      },
+      "DeriveApiTokenRequest": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Human-readable label for the token",
+            "example": "production-trading-bot"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["trading", "account_creation", "delegated_signing"]
+            },
+            "description": "Scopes to grant. Defaults to [\"trading\"] if omitted. Must be a subset of the partner's allowed scopes. `delegated_signing` requires `trading`.",
+            "example": ["trading", "account_creation"]
+          }
+        }
+      },
+      "DeriveApiTokenResponse": {
+        "type": "object",
+        "properties": {
+          "apiKey": {
+            "type": "string",
+            "description": "The token ID, used as the `lmts-api-key` header value for HMAC requests",
+            "example": "dGVzdC10b2tlbi0x"
+          },
+          "secret": {
+            "type": "string",
+            "description": "Base64-encoded secret for HMAC signing. Returned once — store securely.",
+            "example": "c2VjcmV0LWtleS1leGFtcGxlLWJhc2U2NC1lbmNvZGVk"
+          },
+          "tokenId": {
+            "type": "string",
+            "description": "Same as apiKey. The unique token identifier.",
+            "example": "dGVzdC10b2tlbi0x"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Token creation timestamp"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Granted scopes",
+            "example": ["trading", "account_creation"]
+          },
+          "profile": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "description": "Partner profile ID",
+                "example": 42
+              },
+              "account": {
+                "type": "string",
+                "description": "Partner wallet address",
+                "example": "0x27b4afBD88fE7c88c6897BB0b4ADE338D0401E37"
+              }
+            }
+          }
+        },
+        "required": ["apiKey", "secret", "tokenId", "createdAt", "scopes", "profile"]
+      },
+      "ApiTokenListItem": {
+        "type": "object",
+        "properties": {
+          "tokenId": {
+            "type": "string",
+            "description": "Unique token identifier"
+          },
+          "label": {
+            "type": "string",
+            "nullable": true,
+            "description": "Human-readable label"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Granted scopes"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Token creation timestamp"
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Last time the token was used for authentication"
+          }
+        },
+        "required": ["tokenId", "label", "scopes", "createdAt", "lastUsedAt"]
+      },
+      "PartnerCapabilitiesResponse": {
+        "type": "object",
+        "properties": {
+          "partnerProfileId": {
+            "type": "integer",
+            "description": "Partner profile ID",
+            "example": 42
+          },
+          "tokenManagementEnabled": {
+            "type": "boolean",
+            "description": "Whether the partner can manage tokens via self-service endpoints",
+            "example": true
+          },
+          "allowedScopes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["trading", "account_creation", "delegated_signing"]
+            },
+            "description": "Scopes the partner is allowed to request when deriving tokens",
+            "example": ["trading", "account_creation", "delegated_signing"]
+          }
+        },
+        "required": ["partnerProfileId", "tokenManagementEnabled", "allowedScopes"]
+      },
+      "CreatePartnerAccountRequest": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "maxLength": 44,
+            "description": "Public display name for the sub-account. Defaults to the wallet address if omitted.",
+            "example": "user-alice"
+          },
+          "createServerWallet": {
+            "type": "boolean",
+            "description": "If true, creates a Privy server wallet for the sub-account (enables delegated signing). If false or omitted, requires EOA wallet ownership headers.",
+            "default": false
+          }
+        }
+      },
+      "CreatePartnerAccountResponse": {
+        "type": "object",
+        "properties": {
+          "profileId": {
+            "type": "integer",
+            "description": "Profile ID of the created sub-account",
+            "example": 789
+          },
+          "account": {
+            "type": "string",
+            "description": "Wallet address of the created sub-account",
+            "example": "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"
+          }
+        },
+        "required": ["profileId", "account"]
       }
     }
   }

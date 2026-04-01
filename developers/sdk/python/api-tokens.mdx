@@ -1,0 +1,106 @@
+---
+title: "API Tokens"
+description: "Manage scoped API tokens with the Python SDK"
+---
+
+The `ApiTokenService` handles the partner self-service token lifecycle: checking capabilities, deriving tokens, listing active tokens, and revoking them.
+
+<Note>
+  Token derivation and capability queries require a **Privy identity token**. The SDK does not obtain this token for you — your application must authenticate the partner via Privy and pass the resulting token.
+</Note>
+
+## Access
+
+The service is available on the root `Client`:
+
+```python
+from limitless_sdk import Client
+
+client = Client(base_url="https://api.limitless.exchange")
+
+# Use client.api_tokens.*
+```
+
+## Get partner capabilities
+
+Check whether token management is enabled and which scopes are allowed.
+
+```python
+capabilities = await client.api_tokens.get_capabilities(identity_token)
+
+print(capabilities.token_management_enabled)  # bool
+print(capabilities.allowed_scopes)            # e.g. ['trading', 'account_creation', 'delegated_signing']
+```
+
+## Derive a token
+
+Create a new scoped API token. The `secret` is returned once — store it securely.
+
+```python
+from limitless_sdk import (
+    DeriveApiTokenInput,
+    ScopeTrading,
+    ScopeAccountCreation,
+    ScopeDelegatedSigning,
+)
+
+derived = await client.api_tokens.derive_token(
+    identity_token,
+    DeriveApiTokenInput(
+        label="production-bot",
+        scopes=[ScopeTrading, ScopeAccountCreation, ScopeDelegatedSigning],
+    ),
+)
+
+# derived.token_id  — used as lmts-api-key header
+# derived.secret    — base64-encoded HMAC secret (one-time)
+# derived.scopes    — granted scopes
+# derived.profile   — { id, account }
+```
+
+### Creating an HMAC-authenticated client
+
+After deriving a token, create a new `Client` with the HMAC credentials:
+
+```python
+from limitless_sdk import Client, HMACCredentials
+
+scoped_client = Client(
+    base_url="https://api.limitless.exchange",
+    hmac_credentials=HMACCredentials(
+        token_id=derived.token_id,
+        secret=derived.secret,
+    ),
+)
+```
+
+If `scopes` is omitted, the token defaults to `['trading']`. Requested scopes must be a subset of the partner's `allowed_scopes`.
+
+## List active tokens
+
+Returns all non-revoked tokens for the authenticated partner.
+
+```python
+tokens = await scoped_client.api_tokens.list_tokens()
+
+for token in tokens:
+    print(token.token_id, token.label, token.scopes, token.last_used_at)
+```
+
+## Revoke a token
+
+Immediately invalidates a token. This cannot be undone.
+
+```python
+message = await scoped_client.api_tokens.revoke_token(derived.token_id)
+```
+
+## Scope constants
+
+The SDK exports typed scope constants:
+
+| Constant | Value |
+|----------|-------|
+| `ScopeTrading` | `'trading'` |
+| `ScopeAccountCreation` | `'account_creation'` |
+| `ScopeDelegatedSigning` | `'delegated_signing'` |

@@ -1,0 +1,8 @@
+---
+title: "Revoke Token"
+openapi: "DELETE /auth/api-tokens/{tokenId}"
+---
+
+Revokes an active API token immediately. Once revoked, the token cannot be used for authentication and the action cannot be undone.
+
+Requires token management to be enabled for the partner (see [Get Partner Capabilities](/api-reference/api-tokens/get-capabilities)).
