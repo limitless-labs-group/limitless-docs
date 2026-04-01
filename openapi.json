@@ -3366,17 +3366,17 @@
           "slug": {
             "type": "string",
             "description": "Market slug",
-            "example": "market-1-1744046422691"
+            "example": "btc-above-100k-jul-4"
           },
           "title": {
             "type": "string",
             "description": "Market title",
-            "example": "Market 1"
+            "example": "$BTC above $100k on Jul 4?"
           },
           "deadline": {
             "type": "string",
             "description": "Market deadline",
-            "example": "2025-04-11T22:34:56.000Z"
+            "example": "2025-07-04T23:59:59.000Z"
           }
         },
         "required": [
@@ -3396,13 +3396,13 @@
         "properties": {
           "blockTimestamp": {
             "type": "number",
-            "description": "Block timestamp of the operation",
+            "description": "Block timestamp of the operation (unix seconds)",
             "example": 1744115608
           },
           "collateralAmount": {
             "type": "string",
-            "description": "Collateral amount involved in the operation",
-            "example": "0"
+            "description": "Collateral amount involved (human-readable, after dividing by token decimals)",
+            "example": "25.5"
           },
           "market": {
             "description": "Market information",
@@ -3414,13 +3414,13 @@
           },
           "outcomeTokenAmount": {
             "type": "string",
-            "description": "Amount of outcome tokens involved",
-            "example": "100"
+            "description": "Amount of outcome tokens involved (human-readable)",
+            "example": "50"
           },
           "outcomeTokenAmounts": {
-            "description": "Amounts of outcome tokens for each outcome",
+            "description": "Amounts of outcome tokens for each outcome [YES, NO]",
             "example": [
-              "100",
+              "50",
               "0"
             ],
             "type": "array",
@@ -3430,18 +3430,18 @@
           },
           "outcomeIndex": {
             "type": "number",
-            "description": "Index of the outcome",
+            "description": "Index of the outcome (0 = YES, 1 = NO)",
             "example": 0
           },
           "outcomeTokenPrice": {
             "type": "number",
-            "description": "Price of the outcome token",
-            "example": 0.5
+            "description": "Effective price per outcome token for this fill",
+            "example": 0.51
           },
           "strategy": {
             "type": "string",
-            "description": "Type of operation",
-            "example": "Convert",
+            "description": "Type of operation. `Buy`/`Sell` = AMM trades, `Limit Buy`/`Limit Sell` = CLOB maker fills, `Market Buy`/`Market Sell` = CLOB taker fills, `Split`/`Merge` = position split/merge, `Convert` = NegRisk conversion, `Claim` = winnings redemption.",
+            "example": "Limit Buy",
             "enum": [
               "Buy",
               "Sell",
@@ -3451,12 +3451,13 @@
               "Market Sell",
               "Split",
               "Merge",
-              "Convert"
+              "Convert",
+              "Claim"
             ]
           },
           "transactionHash": {
             "type": "string",
-            "description": "Transaction hash of the operation",
+            "description": "On-chain transaction hash (present for settled trades, splits, merges, conversions, and claims)",
             "example": "0x992f36465f938b21a6a5fe3c417c98c3268a616a05479d2dc53870c6cd1a0761"
           }
         },
