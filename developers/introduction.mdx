@@ -17,7 +17,7 @@ Build on Limitless with **REST** and **WebSocket** APIs for programmatic trading
 
 ## Capabilities
 
-<CardGroup cols={2}>
+<CardGroup cols={3}>
   <Card title="REST API" icon="server">
     - Authenticate with API keys
     - Fetch market data and venue info
@@ -29,19 +29,31 @@ Build on Limitless with **REST** and **WebSocket** APIs for programmatic trading
     - Orderbook streaming for CLOB markets
     - Position change notifications
   </Card>
+  <Card title="Programmatic API" icon="code">
+    - HMAC-scoped partner tokens
+    - Sub-account management
+    - Delegated signing (GTC and FOK orders)
+    - Server-managed wallets
+  </Card>
 </CardGroup>
 
 ## Quick Navigation
 
 <CardGroup cols={2}>
   <Card title="Authentication" icon="key" href="/developers/authentication">
-    API key setup and authentication flow.
+    API key setup, HMAC tokens, and authentication flow.
+  </Card>
+  <Card title="Programmatic API" icon="code" href="/developers/programmatic-api">
+    Partner tokens, sub-accounts, and delegated signing.
   </Card>
   <Card title="Python Quick Start" icon="python" href="/developers/quickstart/python">
     End-to-end trading in Python.
   </Card>
   <Card title="Node.js Quick Start" icon="js" href="/developers/quickstart/nodejs">
     TypeScript/Node.js integration with viem.
+  </Card>
+  <Card title="Migrate from Polymarket" icon="arrow-right" href="/developers/migrate-from-polymarket">
+    Map Polymarket concepts to Limitless equivalents.
   </Card>
   <Card title="API Reference" icon="book" href="/api-reference/introduction">
     Full endpoint documentation.

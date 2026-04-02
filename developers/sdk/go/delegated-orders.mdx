@@ -9,6 +9,10 @@ The `DelegatedOrderService` enables partners with the `delegated_signing` scope 
   Delegated signing requires a sub-account created with `CreateServerWallet: true`. EOA sub-accounts sign their own orders.
 </Warning>
 
+<Info>
+  **Recommended setup:** Store your HMAC credentials (`TokenID` / `Secret`) on your backend. Use this SDK server-side to sign partner-authenticated requests. Expose only your own app-specific endpoints to the frontend. Never expose HMAC secrets in browser bundles or client-side storage.
+</Info>
+
 ## Access
 
 ```go
@@ -24,19 +28,21 @@ client := limitless.NewClient(
 // Use client.DelegatedOrders.*
 ```
 
-## Create a delegated order
+## Create a GTC delegated order
 
-Builds an unsigned order locally and submits it to `POST /orders` with the `OnBehalfOf` profile ID. The server signs the order via the sub-account's managed wallet.
+Builds an unsigned GTC (Good Till Cancelled) limit order locally and submits it to `POST /orders` with the `OnBehalfOf` profile ID. The server signs the order via the sub-account's managed wallet. GTC orders remain on the orderbook until filled or explicitly cancelled.
 
 ```go
 response, err := client.DelegatedOrders.CreateOrder(ctx, limitless.CreateDelegatedOrderParams{
-    MarketSlug:  "btc-100k",
-    OrderType:   limitless.OrderTypeGTC,
-    OnBehalfOf:  partnerAccount.ProfileID,
-    TokenID:     market.Tokens.Yes,
-    Side:        limitless.SideBuy,
-    Price:       0.55,
-    Size:        10,
+    MarketSlug: "btc-100k",
+    OrderType:  limitless.OrderTypeGTC,
+    OnBehalfOf: partnerAccount.ProfileID,
+    Args: limitless.GTCOrderArgs{
+        TokenID: market.Tokens.Yes,
+        Side:    limitless.SideBuy,
+        Price:   0.55,
+        Size:    10,
+    },
 })
 if err != nil {
     log.Fatal(err)
@@ -44,6 +50,76 @@ if err != nil {
 
 fmt.Println(response.Order.ID)
 ```
+
+## Create a FOK delegated order
+
+FOK (Fill or Kill) orders execute immediately at the best available price or are cancelled entirely — there are no partial fills. Instead of `Price` and `Size`, FOK orders use `MakerAmount`:
+
+- **BUY**: `MakerAmount` is the USDC amount to spend (e.g., `50.0` = spend $50 USDC)
+- **SELL**: `MakerAmount` is the number of shares to sell (e.g., `18.64` = sell 18.64 shares)
+
+```go
+// BUY FOK — spend 1 USDC at market price
+response, err := client.DelegatedOrders.CreateOrder(ctx, limitless.CreateDelegatedOrderParams{
+    MarketSlug: "btc-100k",
+    OrderType:  limitless.OrderTypeFOK,
+    OnBehalfOf: partnerAccount.ProfileID,
+    FeeRateBps: 300,
+    Args: limitless.FOKOrderArgs{
+        TokenID:     market.Tokens.Yes,
+        Side:        limitless.SideBuy,
+        MakerAmount: 1.0,
+    },
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+if len(response.MakerMatches) > 0 {
+    fmt.Printf("FOK order matched with %d fill(s)\n", len(response.MakerMatches))
+} else {
+    fmt.Println("FOK order was not matched — cancelled automatically")
+}
+
+// SELL FOK — sell 10 shares at market price
+response, err = client.DelegatedOrders.CreateOrder(ctx, limitless.CreateDelegatedOrderParams{
+    MarketSlug: "btc-100k",
+    OrderType:  limitless.OrderTypeFOK,
+    OnBehalfOf: partnerAccount.ProfileID,
+    Args: limitless.FOKOrderArgs{
+        TokenID:     market.Tokens.Yes,
+        Side:        limitless.SideSell,
+        MakerAmount: 10.0,
+    },
+})
+```
+
+## Parameters
+
+### GTC order args (`GTCOrderArgs`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `MarketSlug` | `string` | Market identifier |
+| `OrderType` | `OrderType` | `limitless.OrderTypeGTC` |
+| `OnBehalfOf` | `int` | Profile ID of the sub-account |
+| `Args.TokenID` | `string` | Position token ID (YES or NO) from market data |
+| `Args.Side` | `Side` | `limitless.SideBuy` or `limitless.SideSell` |
+| `Args.Price` | `float64` | Price between 0 and 1 |
+| `Args.Size` | `float64` | Number of contracts |
+| `FeeRateBps` | `int` | Fee rate in basis points (defaults to 300 if omitted) |
+
+### FOK order args (`FOKOrderArgs`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `MarketSlug` | `string` | Market identifier |
+| `OrderType` | `OrderType` | `limitless.OrderTypeFOK` |
+| `OnBehalfOf` | `int` | Profile ID of the sub-account |
+| `Args.TokenID` | `string` | Position token ID (YES or NO) from market data |
+| `Args.Side` | `Side` | `limitless.SideBuy` or `limitless.SideSell` |
+| `Args.MakerAmount` | `float64` | BUY: USDC to spend. SELL: shares to sell. Max 6 decimals. |
+| `FeeRateBps` | `int` | Fee rate in basis points (defaults to 300 if omitted) |
 
 ## Cancel an order
 
@@ -72,7 +148,8 @@ message, err := client.DelegatedOrders.CancelAllOnBehalfOf(ctx, marketSlug, part
 ## How it works
 
 1. The SDK builds an unsigned order locally with a zero verifying address and default fee rate (300 bps)
-2. The order is posted to `POST /orders` with `OnBehalfOf` and `OwnerID` set to the sub-account's profile ID
-3. The server detects the `delegated_signing` scope and missing signature
-4. The server looks up the sub-account's server wallet, builds EIP-712 typed data, and signs via Privy
-5. The signed order is submitted to the CLOB engine
+2. For GTC orders, `Price` and `Size` are used; for FOK orders, `MakerAmount` is used (with `TakerAmount` always set to 1)
+3. The order is posted to `POST /orders` with `OnBehalfOf` and `OwnerID` set to the sub-account's profile ID
+4. The server detects the `delegated_signing` scope and missing signature
+5. The server looks up the sub-account's server wallet, builds EIP-712 typed data, and signs via Privy
+6. The signed order is submitted to the CLOB engine — FOK orders fill immediately or are cancelled

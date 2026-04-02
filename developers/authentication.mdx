@@ -74,8 +74,12 @@ Every request is signed with HMAC-SHA256. The server verifies the signature usin
 **Canonical message format:**
 
 ```
-{ISO-8601 timestamp}\n{HTTP METHOD}\n{request path}\n{request body}
+{ISO-8601 timestamp}\n{HTTP METHOD}\n{request path with query string}\n{request body}
 ```
+
+<Warning>
+  The path component must include the **full request URL path and query string** (e.g., `/orders/all/btc-100k?onBehalfOf=42`), not just the pathname. For requests without a query string, use the plain path (e.g., `/orders`). For GET requests, the body component is an empty string.
+</Warning>
 
 **Example (TypeScript):**
 

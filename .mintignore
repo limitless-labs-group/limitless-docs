@@ -7,4 +7,4 @@ drafts/
 *.draft.mdx
 
 # Reference materials (not published as docs pages)
-docs-reference/
+doc-reference/

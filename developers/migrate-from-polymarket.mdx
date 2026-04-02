@@ -14,9 +14,9 @@ If you've built bots or agents on Polymarket, this guide maps every concept, end
 | **Collateral** | USDC.e | USDC (6 decimals) |
 | **REST hosts** | `gamma-api.polymarket.com` (data) + `clob.polymarket.com` (trading) | `api.limitless.exchange` (unified) |
 | **WebSocket** | `wss://ws-subscriptions-clob.polymarket.com` | `wss://ws.limitless.exchange` |
-| **Auth model** | L1/L2 — derive API creds with EIP-712, sign every request with HMAC | Single API key in `X-API-Key` header |
+| **Auth model** | L1/L2 — derive API creds with EIP-712, sign every request with HMAC | API key (`X-API-Key`) for individual use; HMAC scoped tokens for [partner integrations](/developers/programmatic-api) |
 | **SDKs** | `py-clob-client`, `@polymarket/clob-client`, `polymarket-client-sdk` (Rust) | [Python SDK](/developers/sdk/python/getting-started), [TypeScript SDK](/developers/sdk/typescript/getting-started), [Go SDK](/developers/sdk/go/getting-started), or direct REST |
-| **Wallet types** | EOA, Proxy, Gnosis Safe | EOA |
+| **Wallet types** | EOA, Proxy, Gnosis Safe | EOA, or server-managed wallets via [delegated signing](/developers/programmatic-api#delegated-order-types) |
 | **Market lookup** | `condition_id` or `clobTokenIds` | `slug` or address |
 | **Token IDs** | `clobTokenIds[0]` = Yes, `[1]` = No | `positionIds[0]` = Yes, `[1]` = No |
 | **Order signing** | EIP-712 `verifyingContract` = CTF Exchange | EIP-712 `verifyingContract` = `venue.exchange` |
@@ -65,7 +65,7 @@ Limitless uses a single API key generated in the UI.
   </Tab>
 </Tabs>
 
-No HMAC signing, no credential derivation, no `POLY_*` headers.
+No `POLY_*` headers or credential derivation for basic API access. For partner integrations that need sub-account management and delegated order signing, Limitless offers [HMAC-signed scoped tokens](/developers/programmatic-api) — but this is opt-in for partners, not required for individual trading.
 
 ## Endpoint mapping
 
@@ -394,6 +394,26 @@ resp = requests.post(f"{API}/orders", headers=H, json={
 print(resp.json())
 ```
 
+## Partner and platform migrations
+
+If you're migrating a platform that manages multiple user accounts on Polymarket (e.g., a trading desk, social trading app, or embedded prediction market), the Limitless [Programmatic API](/developers/programmatic-api) provides a first-class partner flow:
+
+| Polymarket pattern | Limitless equivalent |
+|---|---|
+| Manage many wallets and private keys | Create sub-accounts with server-managed wallets — no private key management |
+| Sign orders per-user with their keys | [Delegated signing](/developers/programmatic-api#delegated-order-types) — server signs via Privy, submit unsigned orders |
+| Derive HMAC creds per integration | Derive [scoped API tokens](/developers/authentication#scoped-api-tokens-hmac) with granular permissions |
+
+<Info>
+  **Recommended setup for partners:**
+  - Store HMAC credentials on your backend — never expose them to frontends
+  - Use the SDK server-side to sign partner-authenticated requests
+  - Expose only your own app-specific endpoints to the frontend
+  - Keep public market reads (orderbooks, prices) directly in the browser
+</Info>
+
+Both GTC (limit) and FOK (market) order types are supported for delegated orders. See the [Delegated Orders](/developers/sdk/typescript/delegated-orders) SDK pages for full examples.
+
 ## Next steps
 
 <CardGroup cols={2}>
@@ -402,6 +422,9 @@ print(resp.json())
   </Card>
   <Card title="Venue system" icon="building" href="/developers/venue-system">
     How venue contracts and token approvals work.
+  </Card>
+  <Card title="Programmatic API" icon="code" href="/developers/programmatic-api">
+    Partner integrations, sub-accounts, and delegated signing.
   </Card>
   <Card title="API reference" icon="book" href="/api-reference/introduction">
     Complete endpoint documentation.

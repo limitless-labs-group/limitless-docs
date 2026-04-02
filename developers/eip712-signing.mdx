@@ -7,6 +7,10 @@ description: "How to sign orders using EIP-712 structured data"
 
 All orders on Limitless are signed using **EIP-712 structured data**. The venue's exchange address is used as the `verifyingContract` in the signing domain.
 
+<Tip>
+  If you're using the [Programmatic API](/developers/programmatic-api) with delegated signing, the server handles EIP-712 signing for you via managed wallets. This page is for partners and traders who sign orders with their own private keys.
+</Tip>
+
 ## EIP-712 Domain
 
 ```json
@@ -52,8 +56,8 @@ All orders on Limitless are signed using **EIP-712 structured data**. The venue'
 | `signer` | address | Same as maker for EOA wallets |
 | `taker` | address | `0x000...000` for open orders (any taker) |
 | `tokenId` | uint256 | Position ID — YES or NO token from market data |
-| `makerAmount` | uint256 | Amount the maker offers (USDC scaled by 1e6) |
-| `takerAmount` | uint256 | Amount the maker wants in return (shares scaled by 1e6) |
+| `makerAmount` | uint256 | Amount the maker offers, scaled by 1e6 (see [Amount Calculation](#amount-calculation)) |
+| `takerAmount` | uint256 | Amount the maker wants in return, scaled by 1e6 (always `1` for FOK orders) |
 | `expiration` | uint256 | `0` for no expiration |
 | `nonce` | uint256 | Order nonce |
 | `feeRateBps` | uint256 | Fee rate in basis points |
@@ -69,11 +73,34 @@ All orders on Limitless are signed using **EIP-712 structured data**. The venue'
 
 ## Amount Calculation
 
-- USDC has **6 decimals** (1 USDC = 1,000,000 units)
-- Shares are scaled by **1e6** for precision
-- Prices are in **cents** (e.g., 65 = 65c = &#36;0.65)
+USDC has **6 decimals** (1 USDC = 1,000,000 units). Shares are also scaled by **1e6**.
+
+### GTC (limit orders)
+
+| Side | `makerAmount` | `takerAmount` |
+|------|---------------|---------------|
+| **BUY** | `price * size * 1e6` (USDC to spend) | `size * 1e6` (shares to receive) |
+| **SELL** | `size * 1e6` (shares to sell) | `price * size * 1e6` (USDC to receive) |
 
 ```
-makerAmount = priceInDollars * numberOfShares * 1e6
-takerAmount = numberOfShares * 1e6
+// BUY 10 shares at $0.50
+makerAmount = 0.50 * 10 * 1e6 = 5,000,000
+takerAmount = 10 * 1e6         = 10,000,000
+
+// SELL 10 shares at $0.50
+makerAmount = 10 * 1e6         = 10,000,000
+takerAmount = 0.50 * 10 * 1e6  = 5,000,000
 ```
+
+### FOK (market orders)
+
+| Side | `makerAmount` | `takerAmount` |
+|------|---------------|---------------|
+| **BUY** | `usdcToSpend * 1e6` | `1` (constant) |
+| **SELL** | `sharesToSell * 1e6` | `1` (constant) |
+
+FOK orders always set `takerAmount = 1` and omit `price`. The `makerAmount` represents the raw amount being offered.
+
+<Note>
+  The SDKs handle amount scaling automatically — you pass human-readable values (`price`, `size`, or `makerAmount`) and the builder calculates the scaled on-chain amounts.
+</Note>

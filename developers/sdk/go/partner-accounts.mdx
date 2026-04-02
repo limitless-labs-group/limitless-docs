@@ -29,7 +29,7 @@ createServerWallet := true
 account, err := client.PartnerAccounts.CreateAccount(ctx, limitless.CreatePartnerAccountInput{
     DisplayName:        "user-alice",
     CreateServerWallet: &createServerWallet,
-})
+}, nil)
 if err != nil {
     log.Fatal(err)
 }
@@ -51,7 +51,7 @@ EOA mode requires wallet ownership verification headers:
 ```go
 account, err := client.PartnerAccounts.CreateAccount(ctx, limitless.CreatePartnerAccountInput{
     DisplayName: "user-bob",
-}, limitless.CreatePartnerAccountEOAHeaders{
+}, &limitless.CreatePartnerAccountEOAHeaders{
     Account:        "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
     SigningMessage: "0x...",
     Signature:      "0x...",

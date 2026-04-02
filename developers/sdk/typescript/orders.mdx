@@ -83,23 +83,25 @@ async function approveVenue(venueExchange: string) {
 
 ## GTC Orders (Good-Til-Cancelled)
 
-GTC orders remain on the orderbook until filled, cancelled, or the market resolves. Specify `price` (probability between 0 and 1) and `size` (whole number of shares).
+GTC orders remain on the orderbook until filled, cancelled, or the market resolves. Specify `price` (probability between 0 and 1) and `size` (number of shares).
 
 ### Buy YES shares
 
 ```typescript
+import { OrderType, Side } from '@limitless-exchange/sdk';
+
 const market = await marketFetcher.getMarket('btc-100k-weekly');
 
 const result = await orderClient.createOrder({
   marketSlug: market.slug,
   tokenId: market.positionIds[0], // YES token
-  side: 'BUY',
+  side: Side.BUY,
   price: 0.65,
   size: 100,
-  orderType: 'GTC',
+  orderType: OrderType.GTC,
 });
 
-console.log('Order created:', result.id);
+console.log('Order created:', result.order.id);
 ```
 
 ### Sell NO shares
@@ -108,10 +110,10 @@ console.log('Order created:', result.id);
 const result = await orderClient.createOrder({
   marketSlug: market.slug,
   tokenId: market.positionIds[1], // NO token
-  side: 'SELL',
+  side: Side.SELL,
   price: 0.40,
   size: 50,
-  orderType: 'GTC',
+  orderType: OrderType.GTC,
 });
 ```
 
@@ -121,10 +123,10 @@ const result = await orderClient.createOrder({
 |-----------|------|-------------|
 | `marketSlug` | `string` | Market slug identifier |
 | `tokenId` | `string` | YES or NO token ID from `market.positionIds` |
-| `side` | `'BUY' \| 'SELL'` | Order side |
-| `price` | `number` | Price between 0 and 1 (exclusive) |
-| `size` | `number` | Number of shares (whole number) |
-| `orderType` | `'GTC'` | Order type |
+| `side` | `Side` | `Side.BUY` (0) or `Side.SELL` (1) |
+| `price` | `number` | Price between 0 and 1 (exclusive), tick-aligned |
+| `size` | `number` | Number of shares (positive, step-aligned) |
+| `orderType` | `OrderType` | `OrderType.GTC` |
 
 ## FOK Orders (Fill-Or-Kill)
 
@@ -135,12 +137,14 @@ FOK orders execute immediately against the existing orderbook or are rejected en
 For a BUY FOK order, `makerAmount` is the amount of USDC you are willing to spend:
 
 ```typescript
+import { OrderType, Side } from '@limitless-exchange/sdk';
+
 const result = await orderClient.createOrder({
   marketSlug: market.slug,
   tokenId: market.positionIds[0], // YES token
-  side: 'BUY',
+  side: Side.BUY,
   makerAmount: 50, // Spend up to 50 USDC
-  orderType: 'FOK',
+  orderType: OrderType.FOK,
 });
 ```
 
@@ -152,9 +156,9 @@ For a SELL FOK order, `makerAmount` is the number of shares you want to sell:
 const result = await orderClient.createOrder({
   marketSlug: market.slug,
   tokenId: market.positionIds[0], // YES token
-  side: 'SELL',
+  side: Side.SELL,
   makerAmount: 100, // Sell 100 shares
-  orderType: 'FOK',
+  orderType: OrderType.FOK,
 });
 ```
 
@@ -164,20 +168,22 @@ const result = await orderClient.createOrder({
 |-----------|------|-------------|
 | `marketSlug` | `string` | Market slug identifier |
 | `tokenId` | `string` | YES or NO token ID from `market.positionIds` |
-| `side` | `'BUY' \| 'SELL'` | Order side |
-| `makerAmount` | `number` | BUY: USDC to spend. SELL: shares to sell. |
-| `orderType` | `'FOK'` | Order type |
+| `side` | `Side` | `Side.BUY` (0) or `Side.SELL` (1) |
+| `makerAmount` | `number` | BUY: USDC to spend. SELL: shares to sell. Max 6 decimals. |
+| `orderType` | `OrderType` | `OrderType.FOK` |
 
 ## NegRisk Orders
 
 When trading NegRisk markets, always use the **submarket slug** -- not the group slug. Fetch the group to discover submarkets, then fetch the specific submarket to get its token IDs.
 
 ```typescript
+import { OrderType, Side } from '@limitless-exchange/sdk';
+
 // 1. Fetch the NegRisk group
 const group = await marketFetcher.getMarket('us-election-2024');
 
-// 2. Pick a submarket
-const submarket = group.submarkets[0];
+// 2. Pick a submarket from the group's markets array
+const submarket = group.markets[0];
 
 // 3. Fetch submarket details to get token IDs
 const submarketDetail = await marketFetcher.getMarket(submarket.slug);
@@ -186,10 +192,10 @@ const submarketDetail = await marketFetcher.getMarket(submarket.slug);
 const result = await orderClient.createOrder({
   marketSlug: submarketDetail.slug,
   tokenId: submarketDetail.positionIds[0], // YES token
-  side: 'BUY',
+  side: Side.BUY,
   price: 0.55,
   size: 25,
-  orderType: 'GTC',
+  orderType: OrderType.GTC,
 });
 ```
 
@@ -199,13 +205,18 @@ const result = await orderClient.createOrder({
 
 ## Cancel Orders
 
-Cancel an open order by its ID and market slug:
+Cancel an open order by its ID:
 
 ```typescript
-await orderClient.cancelOrder({
-  orderId: 'order_abc123',
-  marketSlug: 'btc-100k-weekly',
-});
+const result = await orderClient.cancel('order_abc123');
+console.log(result.message);
+```
+
+Cancel all orders in a market:
+
+```typescript
+const result = await orderClient.cancelAll('btc-100k-weekly');
+console.log(result.message);
 ```
 
 ## Order States
@@ -223,16 +234,16 @@ await orderClient.cancelOrder({
 The SDK throws `ApiError` for HTTP-level failures. Inspect `status` and `message` for details.
 
 ```typescript
-import { ApiError } from '@limitless-exchange/sdk';
+import { ApiError, OrderType, Side } from '@limitless-exchange/sdk';
 
 try {
   await orderClient.createOrder({
     marketSlug: 'btc-100k-weekly',
     tokenId: market.positionIds[0],
-    side: 'BUY',
+    side: Side.BUY,
     price: 0.65,
     size: 100,
-    orderType: 'GTC',
+    orderType: OrderType.GTC,
   });
 } catch (error) {
   if (error instanceof ApiError) {
@@ -276,17 +287,18 @@ price: -0.1
 </Accordion>
 
 <Accordion title="Size validation">
-  Size must be a positive whole number representing the number of shares. Fractional shares are not supported.
+  Size must be a positive number. Fractional sizes are allowed if they align to the shares step (0.001). Max 3 decimal places.
 
 ```typescript
 // Valid
 size: 1
 size: 100
-size: 10000
+size: 1.5
+size: 0.001
 
 // Invalid (will throw)
 size: 0
-size: 10.5
 size: -1
+size: 0.0001  // too many decimals
 ```
 </Accordion>

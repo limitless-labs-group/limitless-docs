@@ -55,7 +55,8 @@
               "user-guide/analytics",
               "user-guide/refund-policy",
               "user-guide/terms-of-service",
-              "user-guide/privacy-policy"
+              "user-guide/privacy-policy",
+              "changelog/index"
             ]
           }
         ]
@@ -257,6 +258,10 @@
   },
   "navbar": {
     "links": [
+      {
+        "label": "Changelog",
+        "href": "/changelog"
+      },
       {
         "label": "Support",
         "href": "mailto:hey@limitless.network"

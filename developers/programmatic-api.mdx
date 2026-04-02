@@ -9,6 +9,17 @@ The Programmatic API enables partners to build integrations that create and mana
   HMAC credentials contain a secret key and must only be used in **backend or BFF** environments. Never expose them in browser-side code.
 </Warning>
 
+## Recommended architecture
+
+<Info>
+  **Recommended setup for production integrations:**
+
+  - **Store the real HMAC credentials on your backend.** The `tokenId` and `secret` should never leave your server infrastructure.
+  - **Use the SDK server-side to sign partner-authenticated requests.** All trading, account creation, and delegated signing calls should be made from your backend.
+  - **Expose only your own app-specific endpoints to the frontend.** Your frontend talks to your backend API — your backend talks to the Limitless API.
+  - **Keep public market reads in the browser.** Unauthenticated endpoints like market data and orderbooks can be called directly from the frontend.
+</Info>
+
 ## Overview
 
 The programmatic API introduces three capabilities:
@@ -113,18 +124,37 @@ const account = await scopedClient.partnerAccounts.createAccount({
 </Step>
 
 <Step title="Trade on behalf of sub-accounts">
-  With the `delegated_signing` scope and server wallet accounts, submit unsigned orders — the server signs them automatically.
+  With the `delegated_signing` scope and server wallet accounts, submit unsigned orders — the server signs them automatically. Both GTC (limit) and FOK (market) order types are supported.
+
+  **GTC order** — stays on the orderbook until filled or cancelled:
 
 ```typescript
-const order = await scopedClient.delegatedOrders.createOrder({
+import { OrderType, Side } from '@limitless-exchange/sdk';
+
+const gtcOrder = await scopedClient.delegatedOrders.createOrder({
   marketSlug: 'btc-100k',
-  orderType: 'GTC',
+  orderType: OrderType.GTC,
   onBehalfOf: account.profileId,
   args: {
     tokenId: market.tokens.yes,
-    side: 0, // BUY
+    side: Side.BUY,
     price: 0.55,
     size: 10,
+  },
+});
+```
+
+  **FOK order** — executes immediately at market price or is cancelled entirely:
+
+```typescript
+const fokOrder = await scopedClient.delegatedOrders.createOrder({
+  marketSlug: 'btc-100k',
+  orderType: OrderType.FOK,
+  onBehalfOf: account.profileId,
+  args: {
+    tokenId: market.tokens.yes,
+    side: Side.BUY,
+    makerAmount: 10, // spend 10 USDC
   },
 });
 ```
@@ -150,6 +180,88 @@ Set `createServerWallet: true` when creating a sub-account. The server provision
 ### EOA (Web3 partners)
 
 Omit `createServerWallet` or set it to `false`. The partner provides wallet ownership proof via `x-account`, `x-signing-message`, and `x-signature` headers. The end user signs their own orders with their private key.
+
+## Delegated order types
+
+Delegated orders support two execution strategies:
+
+### GTC (Good Till Cancelled)
+
+Limit orders that rest on the orderbook at a specified price until they are filled or explicitly cancelled. Use `price` and `size` to specify the order.
+
+| Parameter | Description |
+|-----------|-------------|
+| `price` | Price between 0 and 1 |
+| `size` | Number of contracts |
+
+### FOK (Fill or Kill)
+
+Market orders that execute immediately at the best available price or are cancelled entirely — no partial fills. Instead of `price` and `size`, FOK orders use `makerAmount`.
+
+| Parameter | Description |
+|-----------|-------------|
+| `makerAmount` | **BUY**: USDC amount to spend (e.g., `50` = spend $50 USDC). **SELL**: number of shares to sell (e.g., `18.64` = sell 18.64 shares). |
+
+<CodeGroup>
+
+```typescript TypeScript
+import { OrderType, Side } from '@limitless-exchange/sdk';
+
+// FOK BUY — spend 1 USDC at market price
+const response = await scopedClient.delegatedOrders.createOrder({
+  marketSlug: 'btc-100k',
+  orderType: OrderType.FOK,
+  onBehalfOf: account.profileId,
+  args: {
+    tokenId: market.tokens.yes,
+    side: Side.BUY,
+    makerAmount: 1,
+  },
+});
+
+if (response.makerMatches?.length) {
+  console.log(`Matched with ${response.makerMatches.length} fill(s)`);
+} else {
+  console.log('Not matched — cancelled automatically');
+}
+```
+
+```python Python
+response = await scoped_client.delegated_orders.create_order(
+    token_id=str(market.tokens.yes),
+    side=Side.BUY,
+    order_type=OrderType.FOK,
+    market_slug="btc-100k",
+    on_behalf_of=account.profile_id,
+    maker_amount=1.0,
+)
+
+if response.maker_matches:
+    print(f"Matched with {len(response.maker_matches)} fill(s)")
+else:
+    print("Not matched — cancelled automatically")
+```
+
+```go Go
+response, err := scopedClient.DelegatedOrders.CreateOrder(ctx, limitless.CreateDelegatedOrderParams{
+    MarketSlug: "btc-100k",
+    OrderType:  limitless.OrderTypeFOK,
+    OnBehalfOf: account.ProfileID,
+    Args: limitless.FOKOrderArgs{
+        TokenID:     market.Tokens.Yes,
+        Side:        limitless.SideBuy,
+        MakerAmount: 1.0,
+    },
+})
+
+if len(response.MakerMatches) > 0 {
+    fmt.Printf("Matched with %d fill(s)\n", len(response.MakerMatches))
+} else {
+    fmt.Println("Not matched — cancelled automatically")
+}
+```
+
+</CodeGroup>
 
 ## HMAC authentication
 

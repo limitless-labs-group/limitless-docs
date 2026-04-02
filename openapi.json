@@ -4147,14 +4147,14 @@
           },
           "makerAmount": {
             "type": "number",
-            "description": "Amount the maker is offering (in wei, 18 decimals)",
-            "example": 1000000000000000000,
+            "description": "Amount the maker is offering, scaled by 1e6. For GTC orders: price * size * 1e6 (BUY) or size * 1e6 (SELL). For FOK orders: USDC to spend * 1e6 (BUY) or shares to sell * 1e6 (SELL).",
+            "example": 5000000,
             "minimum": 0
           },
           "takerAmount": {
             "type": "number",
-            "description": "Amount the maker wants in return (in wei, 18 decimals)",
-            "example": 750000000000000000,
+            "description": "Amount the maker wants in return, scaled by 1e6. For GTC orders: size * 1e6 (BUY) or price * size * 1e6 (SELL). For FOK orders: always 1.",
+            "example": 10000000,
             "minimum": 0
           },
           "expiration": {

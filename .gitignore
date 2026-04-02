@@ -15,3 +15,5 @@ api-1.json
 .DS_Store
 limitless-docs-audit.mdn
 client_secret_*.json
+
+doc-reference/

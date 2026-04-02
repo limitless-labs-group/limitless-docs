@@ -1,0 +1,150 @@
+---
+title: "Changelog"
+description: "Notable changes to the Limitless Exchange platform, API, and SDKs"
+---
+
+Welcome to the Limitless Changelog. Here you'll find important changes to the Limitless Exchange platform including API updates, SDK releases, and new features.
+
+## Apr 2, 2026
+
+### Programmatic API: Partner Integrations, Delegated Signing & FOK Orders
+
+Major new capability for partners building on Limitless. The Programmatic API enables platform integrations with sub-account management, server-side order signing, and both GTC and FOK order types — all through HMAC-authenticated scoped tokens.
+
+**New API endpoints:**
+- `POST /auth/api-tokens/derive` — Create scoped HMAC tokens with granular permissions (`trading`, `account_creation`, `delegated_signing`)
+- `GET /auth/api-tokens/capabilities` — Check partner capability configuration
+- `GET /auth/api-tokens` — List active tokens
+- `DELETE /auth/api-tokens/:tokenId` — Revoke a token
+- `POST /profiles/partner-accounts` — Create sub-accounts with server-managed wallets or EOA verification
+
+**Delegated signing:**
+- Partners with the `delegated_signing` scope can submit unsigned orders on behalf of sub-accounts
+- The server signs orders using Privy-managed wallets — no private key management needed on the partner side
+- Both **GTC** (limit) and **FOK** (market) order types are supported for delegated orders
+- FOK orders use `makerAmount` (USDC to spend for BUY, shares to sell for SELL) instead of `price` + `size`
+
+**Recommended architecture:**
+- Store HMAC credentials on your backend — never expose them to frontends
+- Use the SDK server-side to sign partner-authenticated requests
+- Expose only your own app-specific endpoints to the frontend
+
+**Documentation:** [Programmatic API guide](/developers/programmatic-api) | [Authentication](/developers/authentication#scoped-api-tokens-hmac) | [API Tokens reference](/api-reference/api-tokens/derive-token)
+
+### SDK v1.0.4: Programmatic API Support (TypeScript, Python, Go)
+
+All three official SDKs now include full support for the Programmatic API:
+
+**New services across all SDKs:**
+- `ApiTokenService` — Derive, list, and revoke scoped HMAC tokens
+- `PartnerAccountService` — Create sub-accounts with server wallets or EOA verification
+- `DelegatedOrderService` — Place GTC and FOK orders on behalf of sub-accounts, cancel orders
+
+**New root `Client` entrypoint:**
+- Composes all domain services (markets, portfolio, orders, API tokens, partner accounts, delegated orders) behind a single constructor
+- HMAC credentials are configured once and applied to all requests automatically
+
+**TypeScript SDK:**
+- `Client` with `hmacCredentials` option
+- `client.apiTokens`, `client.partnerAccounts`, `client.delegatedOrders`
+- WebSocket HMAC authentication support
+- [TypeScript SDK docs](/developers/sdk/typescript/getting-started)
+
+**Python SDK:**
+- `Client` with `hmac_credentials` option
+- `client.api_tokens`, `client.partner_accounts`, `client.delegated_orders`
+- WebSocket HMAC handshake support
+- [Python SDK docs](/developers/sdk/python/getting-started)
+
+**Go SDK:**
+- `NewClient(limitless.WithHMACCredentials(...))`
+- `client.ApiTokens`, `client.PartnerAccounts`, `client.DelegatedOrders`
+- WebSocket HMAC authentication support
+- [Go SDK docs](/developers/sdk/go/getting-started)
+
+## Mar 23, 2026
+
+### SDK v1.0.3: Market Pages Navigation
+
+All three SDKs now support the market pages navigation API for browsing markets by category.
+
+**New capabilities:**
+- Navigation tree discovery
+- Market page resolution by path with automatic redirect handling
+- Market listing with filters, pagination, and cursor support
+- Property keys and options for dynamic filtering
+
+**TypeScript:** [Market Pages](/developers/sdk/typescript/market-pages) | **Python:** [Market Pages](/developers/sdk/python/market-pages) | **Go:** [Market Pages](/developers/sdk/go/market-pages)
+
+### Go SDK v1.0.3: Initial Stable Release
+
+First stable, production-ready release of the Go SDK with full feature parity.
+
+**Highlights:**
+- EIP-712 order signing with private key (Base mainnet)
+- GTC and FOK order support
+- WebSocket streaming with Socket.IO protocol, auto-reconnect, and typed event handlers
+- Configurable retry with exponential backoff
+- Functional options pattern throughout (`WithBaseURL`, `WithAPIKey`, `WithLogger`, etc.)
+- Zero external dependencies beyond `go-ethereum` and `gorilla/websocket`
+
+**Documentation:** [Go SDK](/developers/sdk/go/getting-started)
+
+## Mar 2026
+
+### WebSocket Market Lifecycle Events
+
+New WebSocket events for market creation and resolution, enabling real-time monitoring of market lifecycle changes.
+
+- `market.created` — Fires when a new market is created
+- `market.resolved` — Fires when a market resolves
+
+**Documentation:** [WebSocket Events](/developers/websocket-events)
+
+## Feb 2026
+
+### SDK v1.0.2: Stable LTS Release (TypeScript & Python)
+
+First stable, long-term support releases of the TypeScript and Python SDKs.
+
+**Core features across both SDKs:**
+- API key authentication with `X-API-Key` header
+- EIP-712 order signing with venue-aware contract resolution
+- GTC and FOK order creation with automatic signing
+- Market data fetching with intelligent venue caching
+- Portfolio and position tracking
+- WebSocket streaming with auto-reconnect
+- Retry mechanisms with configurable backoff strategies
+- NegRisk market support with dual approval system
+
+**TypeScript SDK highlights:**
+- Full TypeScript type safety with comprehensive type definitions
+- 17 production-ready code samples
+- `@retryOnErrors` decorator and `withRetry` wrapper
+- [TypeScript SDK docs](/developers/sdk/typescript/getting-started)
+
+**Python SDK highlights:**
+- Async-first architecture built on aiohttp
+- Pydantic models for type-safe request/response handling
+- `@retry_on_errors` decorator
+- [Python SDK docs](/developers/sdk/python/getting-started)
+
+### Python SDK v1.0.2: Float Precision Fix
+
+Fixed IEEE 754 float precision issues in order pricing that could cause incorrect `makerAmount`/`takerAmount` calculations (e.g., `0.95` scaling to `949999` instead of `950000`).
+
+## Dec 2025
+
+### API: Cookie-Based Authentication Removed
+
+Cookie-based session authentication has been removed. All programmatic access now requires API keys (`X-API-Key` header) or scoped API tokens (HMAC).
+
+**Action required:** If you were using cookie-based authentication, migrate to API key authentication. Generate keys at [limitless.exchange](https://limitless.exchange) under profile menu → Api keys.
+
+**Documentation:** [Authentication](/developers/authentication)
+
+## Nov 2025
+
+### Initial SDK Releases (Pre-release)
+
+Pre-release versions of the TypeScript (v0.0.1) and Python (v0.1.0) SDKs launched with core trading functionality including market data access, GTC/FOK order creation, and portfolio tracking.

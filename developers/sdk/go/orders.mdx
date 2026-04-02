@@ -112,8 +112,8 @@ fmt.Printf("Order placed: %+v\n", result.Order)
 | `Side` | `Side` | `SideBuy` (0) or `SideSell` (1) |
 | `Price` | `float64` | Price per share (0.0–1.0, must be tick-aligned to 0.001) |
 | `Size` | `float64` | Number of shares to buy or sell |
-| `Expiration` | `string` | Optional expiration timestamp |
-| `Nonce` | `string` | Optional nonce (auto-generated if empty) |
+| `Expiration` | `string` | Optional expiration timestamp (default `"0"` = no expiration) |
+| `Nonce` | `*int` | Optional nonce for replay protection (auto-generated if `nil`) |
 | `Taker` | `string` | Optional taker address (defaults to zero address) |
 
 ## FOK Orders (Fill-or-Kill)
@@ -160,8 +160,8 @@ FOK orders execute immediately and fully, or are rejected entirely. Instead of `
 | `TokenID` | `string` | Token ID from `Market.Tokens.Yes` or `Market.Tokens.No` |
 | `Side` | `Side` | `SideBuy` (0) or `SideSell` (1) |
 | `MakerAmount` | `float64` | USDC to spend (buy) or shares to sell (sell), max 6 decimal places |
-| `Expiration` | `string` | Optional expiration timestamp |
-| `Nonce` | `string` | Optional nonce (auto-generated if empty) |
+| `Expiration` | `string` | Optional expiration timestamp (default `"0"` = no expiration) |
+| `Nonce` | `*int` | Optional nonce for replay protection (auto-generated if `nil`) |
 | `Taker` | `string` | Optional taker address (defaults to zero address) |
 
 ## Advanced: Build and Sign Separately
