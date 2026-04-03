@@ -110,7 +110,7 @@ socket.on('marketResolved', (data) => {
 ```
 
 <Note>
-  `marketResolved` is also emitted to existing `market:{slug}` room subscribers automatically — you don't need a separate lifecycle subscription to receive resolution events for markets you're already watching.
+  `marketResolved` is also emitted to existing per-market room subscribers automatically (CLOB: `market:{slug}`, AMM: `market:{address}`) — you don't need a separate lifecycle subscription to receive resolution events for markets you're already watching.
 </Note>
 
 To unsubscribe:
