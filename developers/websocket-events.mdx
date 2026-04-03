@@ -91,6 +91,34 @@ socket.on('positions', (data) => {
   Position updates are pushed automatically when your balances change (e.g. after a trade is mined). You do not need to poll.
 </Note>
 
+## Subscribing to Market Lifecycle Events
+
+Subscribe to market creation and resolution events by emitting `subscribe_market_lifecycle`. No authentication required.
+
+```typescript
+socket.on('connect', () => {
+  socket.emit('subscribe_market_lifecycle');
+});
+
+socket.on('marketCreated', (data) => {
+  console.log('New market:', data.slug, data.title);
+});
+
+socket.on('marketResolved', (data) => {
+  console.log('Market resolved:', data.slug, data.winningOutcome);
+});
+```
+
+<Note>
+  `marketResolved` is also emitted to existing `market:{slug}` room subscribers automatically — you don't need a separate lifecycle subscription to receive resolution events for markets you're already watching.
+</Note>
+
+To unsubscribe:
+
+```typescript
+socket.emit('unsubscribe_market_lifecycle');
+```
+
 ## Event Reference
 
 | Event | Direction | Auth Required | Description |
@@ -99,8 +127,12 @@ socket.on('positions', (data) => {
 | `disconnect` | Server → Client | No | Connection lost |
 | `subscribe_market_prices` | Client → Server | No | Subscribe to price/orderbook updates |
 | `subscribe_positions` | Client → Server | Yes | Subscribe to position updates |
+| `subscribe_market_lifecycle` | Client → Server | No | Subscribe to market creation/resolution events |
+| `unsubscribe_market_lifecycle` | Client → Server | No | Unsubscribe from market lifecycle events |
 | `newPriceData` | Server → Client | No | AMM market price update |
 | `orderbookUpdate` | Server → Client | No | CLOB orderbook update |
+| `marketCreated` | Server → Client | No | New market created and visible |
+| `marketResolved` | Server → Client | No | Market resolved with winning outcome |
 | `positions` | Server → Client | Yes | Position balance update |
 | `system` | Server → Client | No | System notifications |
 | `authenticated` | Server → Client | Yes | Authentication confirmation |
@@ -174,3 +206,49 @@ Position updates have different shapes depending on market type.
   "type": "CLOB"
 }
 ```
+
+### `marketCreated`
+
+Emitted when a new market is funded and visible. Hidden markets are excluded.
+
+```json
+{
+  "slug": "btc-above-110k-apr-2026",
+  "title": "$BTC above $110,000 on Apr 5, 2026?",
+  "type": "CLOB",
+  "groupSlug": "btc-price-markets",
+  "categoryIds": [1, 5],
+  "createdAt": "2026-04-02T12:00:00.000Z"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `slug` | `string` | Market slug identifier |
+| `title` | `string` | Market title |
+| `type` | `'AMM' \| 'CLOB'` | Market type |
+| `groupSlug` | `string?` | Parent group slug (for NegRisk submarkets) |
+| `categoryIds` | `number[]?` | Category IDs the market belongs to |
+| `createdAt` | `string` | ISO-8601 creation timestamp |
+
+### `marketResolved`
+
+Emitted when a market resolves. Sent to both `market_lifecycle` subscribers and existing `market:{slug}` room subscribers.
+
+```json
+{
+  "slug": "btc-above-110k-apr-2026",
+  "type": "CLOB",
+  "winningOutcome": "YES",
+  "winningIndex": 0,
+  "resolutionDate": "2026-04-05T14:00:00.000Z"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `slug` | `string` | Market slug identifier |
+| `type` | `'AMM' \| 'CLOB'` | Market type |
+| `winningOutcome` | `'YES' \| 'NO'` | The winning outcome |
+| `winningIndex` | `0 \| 1` | Index of the winning outcome (0 = YES, 1 = NO) |
+| `resolutionDate` | `string` | ISO-8601 resolution timestamp |
