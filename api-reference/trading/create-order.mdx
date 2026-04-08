@@ -16,6 +16,7 @@ openapi: "POST /orders"
 |-------|------|-------------|
 | `clientOrderId` | `string` | Idempotency key (max 128 chars). If a duplicate is submitted, the server returns `409 Conflict`. |
 | `onBehalfOf` | `number` | Profile ID to place order on behalf of. Requires a [scoped API token](/developers/authentication#scoped-api-tokens-hmac) with `trading` scope and a partner relationship with the target profile. |
+| `postOnly` | `boolean` | GTC orders only. When `true`, the order is rejected if it would immediately match. Guarantees the order rests on the book as a maker order. Default `false`. |
 
 ### Delegated Signing
 

@@ -104,6 +104,24 @@ if err != nil {
 fmt.Printf("Order placed: %+v\n", result.Order)
 ```
 
+### Post-only GTC order
+
+Use `PostOnly: true` to ensure your order is never filled immediately as a taker. If the order would cross the spread (i.e., match against existing orders), it is **rejected** instead. This guarantees you always receive maker fees.
+
+```go
+result, err := orderClient.CreateOrder(ctx, limitless.CreateOrderParams{
+    OrderType:  limitless.OrderTypeGTC,
+    MarketSlug: "btc-above-100k-march-2025",
+    Args: limitless.GTCOrderArgs{
+        TokenID:  market.Tokens.Yes,
+        Side:     limitless.SideBuy,
+        Price:    0.65,
+        Size:     10.0,
+        PostOnly: true,
+    },
+})
+```
+
 ### GTCOrderArgs
 
 | Field | Type | Description |
@@ -112,6 +130,7 @@ fmt.Printf("Order placed: %+v\n", result.Order)
 | `Side` | `Side` | `SideBuy` (0) or `SideSell` (1) |
 | `Price` | `float64` | Price per share (0.0–1.0, must be tick-aligned to 0.001) |
 | `Size` | `float64` | Number of shares to buy or sell |
+| `PostOnly` | `bool` | Optional. When `true`, rejects the order if it would immediately match. Default `false`. |
 | `Expiration` | `string` | Optional expiration timestamp (default `"0"` = no expiration) |
 | `Nonce` | `*int` | Optional nonce for replay protection (auto-generated if `nil`) |
 | `Taker` | `string` | Optional taker address (defaults to zero address) |

@@ -13,29 +13,23 @@ Interactive API explorer (Scalar): [https://api.limitless.exchange/api-v1](https
 
 ## Authentication
 
-Most endpoints require authentication via one of two methods:
+Most endpoints require authentication via **scoped API tokens** with HMAC-SHA256 request signing:
 
 | Method | Headers | Use case |
 |--------|---------|----------|
-| **API Key** | `X-API-Key: lmts_...` | Individual traders, bots, data access |
-| **Scoped API Token (HMAC)** | `lmts-api-key`, `lmts-timestamp`, `lmts-signature` | Partner integrations, delegated signing, sub-account management |
-
-```bash
-curl -H "X-API-Key: lmts_your_key_here" \
-  https://api.limitless.exchange/markets/active
-```
+| **Scoped API Token (HMAC)** | `lmts-api-key`, `lmts-timestamp`, `lmts-signature` | All integrations — traders, bots, partners, delegated signing |
 
 <Note>
-  Public endpoints like market browsing and orderbook data do **not** require authentication.
+  Public endpoints like market browsing and orderbook data do **not** require authentication. Legacy API keys (`X-API-Key`) are still supported for existing users but are no longer issued.
 </Note>
 
-See the [Authentication guide](/developers/authentication) for API keys and HMAC signing details, or the [Programmatic API guide](/developers/programmatic-api) for the full partner integration workflow.
+See the [Authentication guide](/developers/authentication) for HMAC signing details, or the [Programmatic API guide](/developers/programmatic-api) for the full partner integration workflow.
 
 ## Endpoint Groups
 
 <CardGroup cols={2}>
-  <Card title="Authentication" icon="key" href="/api-reference/auth/create-api-key">
-    Manage API keys, verify sessions, and authentication flows.
+  <Card title="Authentication" icon="key" href="/api-reference/api-tokens/derive-token">
+    Derive and manage scoped API tokens for authentication.
   </Card>
   <Card title="API Tokens" icon="shield-halved" href="/api-reference/api-tokens/derive-token">
     Scoped API token management for partner integrations — derive, list, and revoke HMAC-authenticated tokens.

@@ -104,6 +104,22 @@ const result = await orderClient.createOrder({
 console.log('Order created:', result.order.id);
 ```
 
+### Post-only GTC order
+
+Use `postOnly: true` to ensure your order is never filled immediately as a taker. If the order would cross the spread (i.e., match against existing orders), it is **rejected** instead. This guarantees you always receive maker fees.
+
+```typescript
+const result = await orderClient.createOrder({
+  marketSlug: market.slug,
+  tokenId: market.positionIds[0], // YES token
+  side: Side.BUY,
+  price: 0.65,
+  size: 100,
+  orderType: OrderType.GTC,
+  postOnly: true,
+});
+```
+
 ### Sell NO shares
 
 ```typescript
@@ -127,6 +143,7 @@ const result = await orderClient.createOrder({
 | `price` | `number` | Price between 0 and 1 (exclusive), tick-aligned |
 | `size` | `number` | Number of shares (positive, step-aligned) |
 | `orderType` | `OrderType` | `OrderType.GTC` |
+| `postOnly` | `boolean` | Optional. When `true`, rejects the order if it would immediately match. Default `false`. |
 
 ## FOK Orders (Fill-Or-Kill)
 

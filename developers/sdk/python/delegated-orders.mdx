@@ -46,6 +46,21 @@ response = await client.delegated_orders.create_order(
 print(response.order.id)
 ```
 
+Use `post_only=True` to ensure the order only rests on the book and is never filled immediately as a taker:
+
+```python
+response = await client.delegated_orders.create_order(
+    token_id=market.tokens.yes,
+    side=Side.BUY,
+    order_type=OrderType.GTC,
+    market_slug="btc-100k",
+    on_behalf_of=partner_account.profile_id,
+    price=0.55,
+    size=10,
+    post_only=True,
+)
+```
+
 ## Create a FOK delegated order
 
 FOK (Fill or Kill) orders execute immediately at the best available price or are cancelled entirely — there are no partial fills. Instead of `price` and `size`, FOK orders use `maker_amount`:

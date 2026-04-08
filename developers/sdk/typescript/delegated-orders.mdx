@@ -48,6 +48,23 @@ const response = await client.delegatedOrders.createOrder({
 console.log(response.order.id);
 ```
 
+Use `postOnly: true` in the args to ensure the order only rests on the book and is never filled immediately as a taker:
+
+```typescript
+const response = await client.delegatedOrders.createOrder({
+  marketSlug: 'btc-100k',
+  orderType: OrderType.GTC,
+  onBehalfOf: partnerAccount.profileId,
+  args: {
+    tokenId: market.tokens.yes,
+    side: Side.BUY,
+    price: 0.55,
+    size: 10,
+    postOnly: true,
+  },
+});
+```
+
 ## Create a FOK delegated order
 
 FOK (Fill or Kill) orders execute immediately at the best available price or are cancelled entirely — there are no partial fills. Instead of `price` and `size`, FOK orders use `makerAmount`:

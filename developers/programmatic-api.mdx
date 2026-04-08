@@ -197,6 +197,7 @@ Limit orders that rest on the orderbook at a specified price until they are fill
 |-----------|-------------|
 | `price` | Price between 0 and 1 |
 | `size` | Number of contracts |
+| `postOnly` | Optional. When `true`, the order is rejected if it would immediately match against existing orders. Guarantees maker-only execution. Default `false`. |
 
 ### FOK (Fill or Kill)
 

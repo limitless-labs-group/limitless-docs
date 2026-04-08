@@ -1,55 +1,19 @@
 ---
 title: "Authentication"
-description: "API key and scoped token authentication for the Limitless Exchange API"
+description: "Scoped token authentication for the Limitless Exchange API"
 ---
 
-## API Key Authentication
+## Overview
 
-All programmatic access to the Limitless Exchange API requires authentication. The simplest method is an **API key**.
+All programmatic access to the Limitless Exchange API requires authentication via **scoped API tokens** with HMAC-SHA256 request signing.
 
 <Warning>
-  Cookie-based session authentication has been **removed**. Use API keys or scoped API tokens for all programmatic access.
+  API keys are **deprecated** and no longer available for new users. Existing API key users should migrate to scoped API tokens. See [Legacy API Keys](#legacy-api-keys) below.
 </Warning>
-
-## Getting an API Key
-
-<Steps>
-
-<Step title="Log in to Limitless Exchange">
-  Go to [limitless.exchange](https://limitless.exchange) and connect your wallet.
-</Step>
-
-<Step title="Open API key settings">
-  Click your **profile menu** (top right) → select **"Api keys"**.
-</Step>
-
-<Step title="Generate a new key">
-  Create a new key. It will start with `lmts_...`.
-</Step>
-
-</Steps>
-
-## Using Your API Key
-
-Include the key in all requests via the `X-API-Key` header:
-
-```bash
-# REST API
-curl -H "X-API-Key: lmts_your_key_here" https://api.limitless.exchange/markets
-
-# WebSocket - pass as header during connection handshake
-```
-
-## Authentication Methods
-
-| Method | Headers | Use Case |
-|--------|---------|----------|
-| API Key | `X-API-Key: lmts_...` | Individual traders, bots, data access |
-| Scoped API Token (HMAC) | `lmts-api-key`, `lmts-timestamp`, `lmts-signature` | Partners, delegated signing, sub-account management |
 
 ## Scoped API Tokens (HMAC)
 
-For partners and advanced integrations, Limitless supports **scoped API tokens** with HMAC-SHA256 request signing. These tokens provide fine-grained access control through scopes.
+Scoped API tokens are the authentication method for the Limitless Exchange API. Every request is authenticated by signing it with HMAC-SHA256 using your token's secret. Tokens are scoped to control what actions they can perform.
 
 ### Scopes
 
@@ -60,8 +24,6 @@ For partners and advanced integrations, Limitless supports **scoped API tokens**
 | `delegated_signing` | Server signs orders on behalf of sub-accounts (requires `trading` scope). Enables Web2 partners to submit orders without end users managing private keys. |
 
 ### HMAC Request Signing
-
-Every request is signed with HMAC-SHA256. The server verifies the signature using the token's secret.
 
 **Required headers:**
 
@@ -143,7 +105,19 @@ def sign_request(token_id: str, secret: str, method: str, path: str, body: str =
 
 ### Getting a Scoped API Token
 
-Scoped API tokens require a partner setup. Contact [hey@limitless.network](mailto:hey@limitless.network) to get started. Once enabled, you can derive tokens via `POST /auth/api-tokens/derive` while authenticated with Privy.
+<Steps>
+
+<Step title="Log in to Limitless Exchange">
+  Go to [limitless.exchange](https://limitless.exchange) and connect your wallet.
+</Step>
+
+<Step title="Derive a token">
+  Derive a scoped token via `POST /auth/api-tokens/derive` while authenticated with Privy. The response includes a `tokenId` and `secret`.
+</Step>
+
+</Steps>
+
+For partner-level scopes (`account_creation`, `delegated_signing`), contact [hey@limitless.network](mailto:hey@limitless.network) to enable your account.
 
 <Note>
   The token secret is returned **once** at creation time. Store it securely — it cannot be retrieved again.
@@ -165,5 +139,22 @@ All Ethereum addresses in API requests must use **checksummed format** (EIP-55 m
 **Example:** `0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed`
 
 <Note>
-  Your private key is still required for **EIP-712 order signing** (unless using delegated signing), but the API key or scoped token handles request authentication.
+  Your private key is still required for **EIP-712 order signing** (unless using delegated signing), but the scoped token handles request authentication.
 </Note>
+
+## Legacy API Keys
+
+<Warning>
+  API keys are **deprecated** and are no longer issued to new users. If you have an existing API key, it will continue to work, but we recommend migrating to scoped API tokens for improved security and access control.
+</Warning>
+
+Existing API key users authenticate via the `X-API-Key` header:
+
+```bash
+curl -H "X-API-Key: lmts_your_key_here" https://api.limitless.exchange/markets
+```
+
+| Method | Headers | Use Case |
+|--------|---------|----------|
+| Scoped API Token (HMAC) | `lmts-api-key`, `lmts-timestamp`, `lmts-signature` | All new integrations — traders, bots, partners, delegated signing |
+| API Key (deprecated) | `X-API-Key: lmts_...` | Legacy users only — no longer issued |

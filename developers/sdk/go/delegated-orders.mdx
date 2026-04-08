@@ -51,6 +51,23 @@ if err != nil {
 fmt.Println(response.Order.ID)
 ```
 
+Use `PostOnly: true` to ensure the order only rests on the book and is never filled immediately as a taker:
+
+```go
+response, err := client.DelegatedOrders.CreateOrder(ctx, limitless.CreateDelegatedOrderParams{
+    MarketSlug: "btc-100k",
+    OrderType:  limitless.OrderTypeGTC,
+    OnBehalfOf: partnerAccount.ProfileID,
+    Args: limitless.GTCOrderArgs{
+        TokenID:  market.Tokens.Yes,
+        Side:     limitless.SideBuy,
+        Price:    0.55,
+        Size:     10,
+        PostOnly: true,
+    },
+})
+```
+
 ## Create a FOK delegated order
 
 FOK (Fill or Kill) orders execute immediately at the best available price or are cancelled entirely — there are no partial fills. Instead of `Price` and `Size`, FOK orders use `MakerAmount`:
