@@ -15,12 +15,16 @@ openapi: "POST /orders"
 | Field | Type | Description |
 |-------|------|-------------|
 | `clientOrderId` | `string` | Idempotency key (max 128 chars). If a duplicate is submitted, the server returns `409 Conflict`. |
-| `onBehalfOf` | `number` | Profile ID to place order on behalf of. Requires a [scoped API token](/developers/authentication#scoped-api-tokens-hmac) with `trading` scope and a partner relationship with the target profile. |
+| `onBehalfOf` | `number` | Profile ID of the sub-account to place the order for. Requires a [scoped API token](/developers/authentication#scoped-api-tokens-hmac) with `trading` scope and a partner relationship with the target profile. The `maker` and `signer` in the order must match the sub-account's wallet address. |
 | `postOnly` | `boolean` | GTC orders only. When `true`, the order is rejected if it would immediately match. Guarantees the order rests on the book as a maker order. Default `false`. |
+
+<Warning>
+  Do **not** send `ownerId` in your request payload. The server sets `ownerId` automatically from the `onBehalfOf` profile. Sending a mismatched `ownerId` will return `"Profile ID does not match the order owner"`.
+</Warning>
 
 ### Delegated Signing
 
-Partners with the `delegated_signing` scope can omit `signature` and `signatureType` from the order object. The server signs the order using a Privy server wallet linked to the target account. See [Authentication](/developers/authentication#delegated-signing) for details.
+Partners with the `delegated_signing` scope can omit `signature` and `signatureType` from the order object. The server signs the order using a Privy server wallet linked to the target sub-account and sets `maker`/`signer` to the server wallet address. See [Authentication](/developers/authentication#delegated-signing) for details.
 
 ### Execution Response
 

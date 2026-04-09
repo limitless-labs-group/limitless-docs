@@ -117,6 +117,26 @@ interface OrderbookLevel {
 }
 ```
 
+### Handling illiquid markets
+
+Markets with empty or one-sided orderbooks can produce misleading midpoint prices. When there are no bids, the midpoint defaults to `(0 + bestAsk) / 2`, which may show 50% even though no one is actively trading. To detect these markets:
+
+```typescript
+const orderbook = await marketFetcher.getOrderBook('some-market');
+
+const hasBids = orderbook.bids.length > 0;
+const hasAsks = orderbook.asks.length > 0;
+
+if (!hasBids || !hasAsks) {
+  console.log('No two-sided market — skip or flag as illiquid');
+} else {
+  const spread = orderbook.asks[0].price - orderbook.bids[0].price;
+  if (spread > 0.20) {
+    console.log('Wide spread — market may have low liquidity');
+  }
+}
+```
+
 ## User Orders
 
 Retrieve your open orders for a specific market using the fluent API. Requires an API key.

@@ -175,15 +175,34 @@ const fokOrder = await scopedClient.delegatedOrders.createOrder({
 | `delegated_signing` | Server signs orders on behalf of sub-accounts via managed wallets. Must be paired with `trading`. | Yes |
 | `admin` | Access admin-protected endpoints. | No (admin-provisioned only) |
 
+## Scope requirements by operation
+
+| Operation | Required scopes |
+|-----------|----------------|
+| Place or cancel orders (`POST /orders`) | `trading` |
+| Create sub-accounts (`POST /profiles/partner-accounts`) | `account_creation` |
+| Create sub-accounts with server wallets (`createServerWallet: true`) | `account_creation` + `delegated_signing` |
+| Submit unsigned orders (server signs) | `trading` + `delegated_signing` |
+
 ## Sub-account modes
 
 ### Server wallet (Web2 partners)
 
-Set `createServerWallet: true` when creating a sub-account. The server provisions a managed Privy wallet and links it to the profile. The partner submits unsigned orders and the server signs them via the managed wallet.
+Set `createServerWallet: true` when creating a sub-account. The server provisions a managed Privy wallet and links it to the profile. The partner submits unsigned orders and the server signs them via the managed wallet. Token approvals are provisioned automatically.
+
+<Warning>
+  Server wallet mode requires both `account_creation` and `delegated_signing` scopes on your API token.
+</Warning>
 
 ### EOA (Web3 partners)
 
 Omit `createServerWallet` or set it to `false`. The partner provides wallet ownership proof via `x-account`, `x-signing-message`, and `x-signature` headers. The end user signs their own orders with their private key.
+
+For EOA mode, the end-to-end flow is:
+
+1. **Register the user's wallet** — call `POST /profiles/partner-accounts` with the user's wallet ownership headers. The response includes a `profileId`.
+2. **User signs orders** — the user signs the EIP-712 order with their private key. Set `maker` and `signer` to the user's wallet address.
+3. **Submit the order** — call `POST /orders` with `onBehalfOf` set to the user's `profileId` from step 1. Do **not** send `ownerId` — the server sets it automatically.
 
 ## Delegated order types
 

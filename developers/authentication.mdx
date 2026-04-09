@@ -112,7 +112,7 @@ def sign_request(token_id: str, secret: str, method: str, path: str, body: str =
 </Step>
 
 <Step title="Derive a token">
-  Derive a scoped token via `POST /auth/api-tokens/derive` while authenticated with Privy. The response includes a `tokenId` and `secret`.
+  Derive a scoped token via `POST /auth/api-tokens/derive`. Pass the `token` field from the Privy authenticate response (not `privy_access_token`) in the `identity` header as `Bearer <token>`. The response includes a `tokenId` and `secret`. This is a one-time setup — use the HMAC credentials for all subsequent requests.
 </Step>
 
 </Steps>

@@ -11,7 +11,11 @@ Creates a new sub-account profile linked to the authenticated partner.
 
 ### Server wallet mode
 
-Set `createServerWallet: true` to create a Privy server wallet for the sub-account. This enables [delegated signing](/developers/authentication#delegated-signing) — the partner can submit unsigned orders and the server signs them using the managed wallet.
+Set `createServerWallet: true` to create a Privy server wallet for the sub-account. This enables [delegated signing](/developers/authentication#delegated-signing) — the partner can submit unsigned orders and the server signs them using the managed wallet. Token approvals are provisioned automatically for server wallet accounts.
+
+<Warning>
+  Server wallet creation requires the `delegated_signing` scope on your API token (in addition to `account_creation`). Without it, the request returns `"Server wallet creation requires delegated_signing scope"`.
+</Warning>
 
 ```json
 {

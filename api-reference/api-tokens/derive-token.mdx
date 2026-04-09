@@ -4,7 +4,7 @@ openapi: "POST /auth/api-tokens/derive"
 ---
 
 <Info>
-  Requires **Privy authentication** (Bearer token). HMAC and API key auth are not accepted for this endpoint.
+  Requires **Privy authentication**. Pass the `token` field from the Privy authenticate response (the identity token) in the `identity` header as `Bearer <token>`. Do **not** use `privy_access_token`. HMAC and API key auth are not accepted for this endpoint.
 </Info>
 
 <Warning>
