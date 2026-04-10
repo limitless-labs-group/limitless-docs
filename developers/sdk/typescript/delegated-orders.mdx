@@ -13,10 +13,6 @@ The `DelegatedOrderService` enables partners with the `delegated_signing` scope 
   **Recommended setup:** Store your HMAC credentials (`tokenId` / `secret`) on your backend. Use this SDK server-side to sign partner-authenticated requests. Expose only your own app-specific endpoints to the frontend. Never expose HMAC secrets in browser bundles or client-side storage.
 </Info>
 
-<Note>
-  `DelegatedOrderService` covers delegated **order placement** and **cancellation**. The current public docs do not document separate SDK helpers for **position redemption** or **withdrawal** on server wallet sub-accounts. See [Programmatic API - Redemption and withdrawal support](/developers/programmatic-api#redemption-and-withdrawal-support).
-</Note>
-
 ## Access
 
 ```typescript

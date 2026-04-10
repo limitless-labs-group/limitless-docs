@@ -227,11 +227,11 @@ If your integration checks settlement directly on-chain, wait until the payout v
 
 #### Redemption and withdrawal support
 
-The current public programmatic surface is focused on **account creation**, **delegated order signing**, and **order management**.
+The programmatic API is focused on **account creation**, **delegated order signing**, and **order management**.
 
-- The public API reference does **not** currently document a dedicated redemption endpoint for server wallet sub-accounts.
-- The public SDKs do **not** currently expose a `redeemPositions` helper on `DelegatedOrderService`.
-- The public docs also do **not** currently document a partner withdrawal endpoint or a main app UI for managing partner-created sub-accounts.
+- There is no partner redemption endpoint for server wallet sub-accounts.
+- The SDK delegated order services do not include a `redeemPositions` helper.
+- There is no partner withdrawal endpoint or partner-facing app UI for managing partner-created sub-accounts.
 
 Treat server wallet sub-accounts as **backend-managed trading accounts**. If your integration requires self-serve redemption or withdrawal flows for those accounts, coordinate with the Limitless team before depending on that path in production.
 
