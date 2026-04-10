@@ -19,7 +19,10 @@ openapi: "POST /orders"
 | `postOnly` | `boolean` | GTC orders only. When `true`, the order is rejected if it would immediately match. Guarantees the order rests on the book as a maker order. Default `false`. |
 
 <Warning>
-  Do **not** send `ownerId` in your request payload. The server sets `ownerId` automatically from the `onBehalfOf` profile. Sending a mismatched `ownerId` will return `"Profile ID does not match the order owner"`.
+  **`ownerId` must match the profile that owns the order** (see [Programmatic API — EOA flow](/developers/programmatic-api#eoa-web3-partners)):
+  - **Partner EOA + signed order + `onBehalfOf`:** set both `onBehalfOf` and `ownerId` to the **sub-account’s** `profileId`. `order.maker` and `order.signer` must match that sub-account’s wallet. A mismatched `ownerId` returns `400` — `"Profile ID does not match the order owner"`.
+  - **Delegated signing** (unsigned `order`, `delegated_signing` scope, server wallet sub-account): the server fills in `ownerId` when it signs — omit the client signature per [Delegated Signing](#delegated-signing) below.
+  - **Trading as yourself** (no `onBehalfOf`): `ownerId` is your own profile id (the SDK often fills this after fetching your profile).
 </Warning>
 
 ### Delegated Signing

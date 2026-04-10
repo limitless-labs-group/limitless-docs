@@ -2,3 +2,7 @@
 title: "Get User Positions (Public)"
 openapi: "GET /portfolio/{account}/positions"
 ---
+
+<Info>
+  `status: RESOLVED` and `winningOutcomeIndex` indicate that the winning outcome is known in the API response. They do **not** guarantee that the underlying conditional token payout has already been settled on-chain or that the position is immediately redeemable. See [Programmatic API - Lifecycle after a trade](/developers/programmatic-api#lifecycle-after-a-trade).
+</Info>

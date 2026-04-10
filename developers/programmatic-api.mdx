@@ -128,7 +128,7 @@ const account = await scopedClient.partnerAccounts.createAccount({
 </Step>
 
 <Step title="Trade on behalf of sub-accounts">
-  With the `delegated_signing` scope and server wallet accounts, submit unsigned orders — the server signs them automatically. Both GTC (limit) and FOK (market) order types are supported.
+  With the `delegated_signing` scope and server wallet accounts, submit unsigned orders — the server signs them automatically. GTC (resting limit), FAK (fill-and-kill limit), and FOK (fill-or-kill market) order types are supported.
 
   **GTC order** — stays on the orderbook until filled or cancelled:
 
@@ -143,6 +143,23 @@ const gtcOrder = await scopedClient.delegatedOrders.createOrder({
     tokenId: market.tokens.yes,
     side: Side.BUY,
     price: 0.55,
+    size: 10,
+    postOnly: true, // Optional for GTC only
+  },
+});
+```
+
+  **FAK order** — matches immediately up to available size and cancels any remainder:
+
+```typescript
+const fakOrder = await scopedClient.delegatedOrders.createOrder({
+  marketSlug: 'btc-100k',
+  orderType: OrderType.FAK,
+  onBehalfOf: account.profileId,
+  args: {
+    tokenId: market.tokens.yes,
+    side: Side.BUY,
+    price: 0.45,
     size: 10,
   },
 });
@@ -194,21 +211,93 @@ Set `createServerWallet: true` when creating a sub-account. The server provision
   Server wallet mode requires both `account_creation` and `delegated_signing` scopes on your API token.
 </Warning>
 
+#### Lifecycle after a trade
+
+For server wallet sub-accounts, it helps to treat **trading**, **market resolution**, and **redemption** as separate stages:
+
+1. **Order execution** - Place and cancel orders through [`POST /orders`](/api-reference/trading/create-order) or the SDK `DelegatedOrderService`.
+2. **Portfolio resolution state** - Portfolio endpoints such as [`GET /portfolio/positions`](/api-reference/portfolio/positions) and [`GET /portfolio/{account}/positions`](/api-reference/public-portfolio/positions) may later show `status: RESOLVED` and `winningOutcomeIndex` once the winning side is known.
+3. **On-chain payout settlement** - Winning positions become redeemable only after the underlying conditional token payout has been reported on-chain.
+
+<Warning>
+  `status: RESOLVED` and `winningOutcomeIndex` in the portfolio response do **not** by themselves guarantee that the underlying conditional token position is already redeemable on-chain. Resolution in the API can appear before the CTF condition has been settled on-chain.
+</Warning>
+
+If your integration checks settlement directly on-chain, wait until the payout vector has been posted before attempting redemption. For CTF-based positions, a condition is not yet settled if `payoutDenominator(conditionId)` is still `0`.
+
+#### Redemption and withdrawal support
+
+The current public programmatic surface is focused on **account creation**, **delegated order signing**, and **order management**.
+
+- The public API reference does **not** currently document a dedicated redemption endpoint for server wallet sub-accounts.
+- The public SDKs do **not** currently expose a `redeemPositions` helper on `DelegatedOrderService`.
+- The public docs also do **not** currently document a partner withdrawal endpoint or a main app UI for managing partner-created sub-accounts.
+
+Treat server wallet sub-accounts as **backend-managed trading accounts**. If your integration requires self-serve redemption or withdrawal flows for those accounts, coordinate with the Limitless team before depending on that path in production.
+
 ### EOA (Web3 partners)
 
-Omit `createServerWallet` or set it to `false`. The partner provides wallet ownership proof via `x-account`, `x-signing-message`, and `x-signature` headers. The end user signs their own orders with their private key.
+Omit `createServerWallet` or set it to `false`. The partner proves wallet ownership using `x-account`, `x-signing-message`, and `x-signature` on `POST /profiles/partner-accounts`. The end user keeps their private key in their own wallet and signs each order (EIP-712) themselves — Limitless never holds their key.
 
-For EOA mode, the end-to-end flow is:
+Scopes: `trading` and `account_creation` are sufficient for EOA partner flows. You do **not** need `delegated_signing` unless you also use [server wallet](#server-wallet-web2-partners) sub-accounts.
 
-1. **Register the user's wallet** — call `POST /profiles/partner-accounts` with the user's wallet ownership headers. The response includes a `profileId`.
-2. **User signs orders** — the user signs the EIP-712 order with their private key. Set `maker` and `signer` to the user's wallet address.
-3. **Submit the order** — call `POST /orders` with `onBehalfOf` set to the user's `profileId` from step 1. Do **not** send `ownerId` — the server sets it automatically.
+#### End-to-end flow
+
+1. **Register the user's wallet (once per address)** — `POST /profiles/partner-accounts` with [EOA headers](/api-reference/partner-accounts/create-partner-account). The response returns `profileId` and the wallet `account`. If a profile already exists for that address, the API returns `409 Conflict` — your app should reuse the stored `profileId` instead of re-registering.
+2. **Persist the mapping in your backend** — save at least `walletAddress → profileId` (and your own user id if you have one). You are **not** storing a Limitless “session object”; you are storing your app’s record so you know which `profileId` to pass on orders. See [What to persist](#what-to-persist-for-eoa-partners) below.
+3. **User signs each order** — build the order per [EIP-712 signing](/developers/eip712-signing) and have the user sign in the browser (e.g. wagmi/viem/ethers). `maker` and `signer` must be the user’s EOA address.
+4. **Submit the order from your backend (HMAC)** — `POST /orders` with HMAC auth, `onBehalfOf` set to the user’s `profileId`, and **`ownerId` set to that same `profileId`** when you send a **signed** order body. The `order`’s `maker` / `signer` must match the sub-account wallet. (If you use **delegated signing** with an unsigned `order`, the server sets `ownerId` for you — that path is for server-wallet sub-accounts, not pure EOA signing.)
+
+#### Architecture (browser + backend)
+
+Typical layout for a Next.js (or any SPA) app:
+
+- **Browser:** connect wallet (e.g. wagmi + RainbowKit); sign the ownership proof for step 1; sign EIP-712 orders for step 3. Never put partner HMAC secrets in client bundles.
+- **Backend (Next.js Route Handlers, server actions, or a separate API):** holds the scoped token `tokenId` / `secret`; signs every request to `api.limitless.exchange` with HMAC; forwards `POST /orders` after the client submits the signed order payload (or proxies market data as needed).
+
+```mermaid
+flowchart LR
+  subgraph browser [Browser]
+    W[User wallet]
+    UI[Your UI]
+  end
+  subgraph server [Your server]
+    BFF[BFF / API routes]
+    HMAC[HMAC partner token]
+  end
+  subgraph lx [Limitless API]
+    PA["POST /profiles/partner-accounts"]
+    PO["POST /orders"]
+  end
+  UI --> W
+  UI -->|"signed order JSON"| BFF
+  BFF --> HMAC
+  HMAC --> PA
+  HMAC --> PO
+```
+
+There is **no official Next.js sample app** in the public GitHub org today; use the [TypeScript SDK](/developers/sdk/typescript/api-tokens) on the server with the pattern above. Generic Node examples in [Quickstart: Node.js](/developers/quickstart/nodejs) illustrate HMAC and orders — swap in partner `hmacCredentials` and `partnerAccounts.createAccount` for EOA registration.
+
+#### What to persist for EOA partners
+
+| Store in your DB | Why |
+|------------------|-----|
+| User’s wallet address and Limitless **`profileId`** | Needed for `onBehalfOf` / `ownerId` on every `POST /orders` for that user. |
+| Optional: `feeRateBps` / profile metadata | You can refetch from the API if needed. |
+
+| Do **not** rely on storing | Notes |
+|-----------------------------|--------|
+| The user’s **private key** | Not required and not recommended; the wallet stays in the user’s client. |
+| A Limitless “login session” to avoid **order** signing | EOA mode requires an **EIP-712 signature per order** (or a new signing policy you implement). You can avoid repeated **registration** by persisting `profileId`. |
+| Partner HMAC `secret` in the browser | Forbidden — keep only on the server. |
+
+**Wallet UX:** Standard wallet connectors remember the user’s connection across visits, so users don’t necessarily “reconnect from scratch” every time — but **each order** still needs a signature unless you move to [server wallet + delegated signing](#server-wallet-web2-partners).
 
 ## Delegated order types
 
-Delegated orders support two execution strategies:
+Delegated orders support three execution strategies:
 
-### GTC (Good Till Cancelled)
+### GTC (Good-Til-Cancelled)
 
 Limit orders that rest on the orderbook at a specified price until they are filled or explicitly cancelled. Use `price` and `size` to specify the order.
 
@@ -218,7 +307,16 @@ Limit orders that rest on the orderbook at a specified price until they are fill
 | `size` | Number of contracts |
 | `postOnly` | Optional. When `true`, the order is rejected if it would immediately match against existing orders. Guarantees maker-only execution. Default `false`. |
 
-### FOK (Fill or Kill)
+### FAK (Fill-And-Kill)
+
+Limit orders that use `price` and `size` like GTC but only match immediately available liquidity. Any unmatched remainder is cancelled.
+
+| Parameter | Description |
+|-----------|-------------|
+| `price` | Price between 0 and 1 |
+| `size` | Number of contracts |
+
+### FOK (Fill-Or-Kill)
 
 Market orders that execute immediately at the best available price or are cancelled entirely — no partial fills. Instead of `price` and `size`, FOK orders use `makerAmount`.
 
@@ -227,6 +325,66 @@ Market orders that execute immediately at the best available price or are cancel
 | `makerAmount` | **BUY**: USDC amount to spend (e.g., `50` = spend $50 USDC). **SELL**: number of shares to sell (e.g., `18.64` = sell 18.64 shares). |
 
 <CodeGroup>
+
+```typescript TypeScript
+import { OrderType, Side } from '@limitless-exchange/sdk';
+
+// FAK BUY — fill immediately up to 10 shares at 0.45, cancel remainder
+const response = await scopedClient.delegatedOrders.createOrder({
+  marketSlug: 'btc-100k',
+  orderType: OrderType.FAK,
+  onBehalfOf: account.profileId,
+  args: {
+    tokenId: market.tokens.yes,
+    side: Side.BUY,
+    price: 0.45,
+    size: 10,
+  },
+});
+
+if (response.makerMatches?.length) {
+  console.log(`Matched immediately with ${response.makerMatches.length} fill(s)`);
+} else {
+  console.log('No immediate fill. Remainder was cancelled.');
+}
+```
+
+```python Python
+response = await scoped_client.delegated_orders.create_order(
+    token_id=str(market.tokens.yes),
+    side=Side.BUY,
+    order_type=OrderType.FAK,
+    market_slug="btc-100k",
+    on_behalf_of=account.profile_id,
+    price=0.45,
+    size=10.0,
+)
+
+if response.maker_matches:
+    print(f"Matched immediately with {len(response.maker_matches)} fill(s)")
+else:
+    print("No immediate fill. Remainder was cancelled.")
+```
+
+```go Go
+response, err := scopedClient.DelegatedOrders.CreateOrder(ctx, limitless.CreateDelegatedOrderParams{
+    MarketSlug: "btc-100k",
+    OrderType:  limitless.OrderTypeFAK,
+    OnBehalfOf: account.ProfileID,
+    Args: limitless.FAKOrderArgs{
+        TokenID: market.Tokens.Yes,
+        Side:    limitless.SideBuy,
+        Price:   0.45,
+        Size:    10.0,
+    },
+})
+
+if len(response.MakerMatches) > 0 {
+    fmt.Printf("Matched immediately with %d fill(s)\n", len(response.MakerMatches))
+} else {
+    fmt.Println("No immediate fill. Remainder was cancelled.")
+}
+```
 
 ```typescript TypeScript
 import { OrderType, Side } from '@limitless-exchange/sdk';

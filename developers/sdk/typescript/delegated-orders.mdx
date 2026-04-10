@@ -13,6 +13,10 @@ The `DelegatedOrderService` enables partners with the `delegated_signing` scope 
   **Recommended setup:** Store your HMAC credentials (`tokenId` / `secret`) on your backend. Use this SDK server-side to sign partner-authenticated requests. Expose only your own app-specific endpoints to the frontend. Never expose HMAC secrets in browser bundles or client-side storage.
 </Info>
 
+<Note>
+  `DelegatedOrderService` covers delegated **order placement** and **cancellation**. The current public docs do not document separate SDK helpers for **position redemption** or **withdrawal** on server wallet sub-accounts. See [Programmatic API - Redemption and withdrawal support](/developers/programmatic-api#redemption-and-withdrawal-support).
+</Note>
+
 ## Access
 
 ```typescript
@@ -28,7 +32,7 @@ const client = new Client({
 
 ## Create a GTC delegated order
 
-Builds an unsigned GTC (Good Till Cancelled) limit order locally and submits it to `POST /orders` with the `onBehalfOf` profile ID. The server signs the order via the sub-account's managed wallet. GTC orders remain on the orderbook until filled or explicitly cancelled.
+Builds an unsigned GTC (Good-Til-Cancelled) limit order locally and submits it to `POST /orders` with the `onBehalfOf` profile ID. The server signs the order via the sub-account's managed wallet. GTC orders remain on the orderbook until filled or explicitly cancelled.
 
 ```typescript
 import { OrderType, Side } from '@limitless-exchange/sdk';
@@ -65,9 +69,37 @@ const response = await client.delegatedOrders.createOrder({
 });
 ```
 
+## Create a FAK delegated order
+
+FAK (Fill-And-Kill) orders use the same `price` and `size` inputs as GTC, but they only consume immediately available liquidity and cancel any unmatched remainder.
+
+`postOnly` is not supported for FAK orders.
+
+```typescript
+import { OrderType, Side } from '@limitless-exchange/sdk';
+
+const response = await client.delegatedOrders.createOrder({
+  marketSlug: 'btc-100k',
+  orderType: OrderType.FAK,
+  onBehalfOf: partnerAccount.profileId,
+  args: {
+    tokenId: market.tokens.yes,
+    side: Side.BUY,
+    price: 0.45,
+    size: 10,
+  },
+});
+
+if (response.makerMatches?.length) {
+  console.log(`FAK order matched immediately with ${response.makerMatches.length} fill(s)`);
+} else {
+  console.log('FAK remainder was cancelled.');
+}
+```
+
 ## Create a FOK delegated order
 
-FOK (Fill or Kill) orders execute immediately at the best available price or are cancelled entirely — there are no partial fills. Instead of `price` and `size`, FOK orders use `makerAmount`:
+FOK (Fill-Or-Kill) orders execute immediately at the best available price or are cancelled entirely — there are no partial fills. Instead of `price` and `size`, FOK orders use `makerAmount`:
 
 - **BUY**: `makerAmount` is the USDC amount to spend (e.g., `50` = spend $50 USDC)
 - **SELL**: `makerAmount` is the number of shares to sell (e.g., `18.64` = sell 18.64 shares)
@@ -120,6 +152,20 @@ const sellResponse = await client.delegatedOrders.createOrder({
 | `args.side` | `Side` | `BUY` (0) or `SELL` (1) |
 | `args.price` | `number` | Price between 0 and 1 |
 | `args.size` | `number` | Number of contracts |
+| `args.postOnly` | `boolean` | Optional. `true` rejects the order if it would immediately match. Default `false`. |
+| `feeRateBps` | `number` | Fee rate in basis points (defaults to 300 if omitted) |
+
+### FAK order args
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `marketSlug` | `string` | Market identifier |
+| `orderType` | `OrderType` | `OrderType.FAK` |
+| `onBehalfOf` | `number` | Profile ID of the sub-account |
+| `args.tokenId` | `string` | Position token ID (YES or NO) from market data |
+| `args.side` | `Side` | `BUY` (0) or `SELL` (1) |
+| `args.price` | `number` | Price between 0 and 1 |
+| `args.size` | `number` | Number of contracts |
 | `feeRateBps` | `number` | Fee rate in basis points (defaults to 300 if omitted) |
 
 ### FOK order args
@@ -163,8 +209,8 @@ await client.delegatedOrders.cancelAllOnBehalfOf(marketSlug, partnerAccount.prof
 ## How it works
 
 1. The SDK builds an unsigned order locally using `OrderBuilder` with a zero verifying address
-2. For GTC orders, `price` and `size` are used; for FOK orders, `makerAmount` is used (with `takerAmount` always set to 1)
+2. For GTC and FAK orders, `price` and `size` are used; for FOK orders, `makerAmount` is used (with `takerAmount` always set to 1)
 3. The order is posted to `POST /orders` with `onBehalfOf` and `ownerId` set to the sub-account's profile ID
 4. The server detects the `delegated_signing` scope and missing signature
 5. The server looks up the sub-account's server wallet, builds EIP-712 typed data, and signs via Privy
-6. The signed order is submitted to the CLOB engine — FOK orders fill immediately or are cancelled
+6. The signed order is submitted to the CLOB engine — GTC orders can rest on the book, FAK orders cancel unmatched remainder, and FOK orders either fully fill or cancel

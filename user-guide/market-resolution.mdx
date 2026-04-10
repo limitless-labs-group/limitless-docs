@@ -24,12 +24,16 @@ Every market on Limitless has a defined resolution condition and deadline. When 
 </Step>
 
 <Step title="Winning shares pay out">
-  Winning shares ("Yes" or "No" depending on outcome) are redeemable for &#36;1.00 each. Losing shares become worthless.
+  Winning shares ("Yes" or "No" depending on outcome) are redeemable for &#36;1.00 each after the payout has been settled on-chain. Losing shares become worthless.
 </Step>
 
 </Steps>
 
 ## Oracle Sources
+
+<Info>
+  Market resolution and on-chain redemption readiness are related but not identical. A market can be shown as resolved in the API before the underlying payout is fully settled on-chain, so direct redemption attempts may need to wait until the payout data has been posted.
+</Info>
 
 <Note>
   The exact method of market resolution is normally determined on the market page. Always check the resolution source and criteria on the specific market before trading.
