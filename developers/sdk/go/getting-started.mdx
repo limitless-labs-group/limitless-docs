@@ -20,7 +20,7 @@ The Limitless Exchange Go SDK (`limitless-exchange-go-sdk`) is a fully typed Go 
 ## Installation
 
 ```bash
-go get github.com/limitless-labs-group/limitless-exchange-go-sdk@v1.0.3
+go get github.com/limitless-labs-group/limitless-exchange-go-sdk@v1.0.5
 ```
 
 ## Quick Start
@@ -95,7 +95,10 @@ go get github.com/limitless-labs-group/limitless-exchange-go-sdk@v1.0.3
 
 ## Authentication
 
-The SDK authenticates using an API key passed via the `X-API-Key` header.
+The SDK supports both authentication modes:
+
+- Legacy API key (`X-API-Key`)
+- Scoped token HMAC (`lmts-api-key`, `lmts-timestamp`, `lmts-signature`) for partner/programmatic integrations
 
 <Tabs>
   <Tab title="Environment variable (recommended)">
@@ -109,6 +112,18 @@ The SDK authenticates using an API key passed via the `X-API-Key` header.
     client := limitless.NewHttpClient() // auto-loads LIMITLESS_API_KEY
     ```
   </Tab>
+  <Tab title="HMAC (partner/programmatic)">
+    Use the root client with scoped token credentials:
+
+    ```go
+    client := limitless.NewClient(
+        limitless.WithHMACCredentials(limitless.HMACCredentials{
+            TokenID: "your-token-id",
+            Secret:  "your-base64-secret",
+        }),
+    )
+    ```
+  </Tab>
   <Tab title="Explicit option">
     Pass `WithAPIKey` directly to the constructor:
 
@@ -119,6 +134,10 @@ The SDK authenticates using an API key passed via the `X-API-Key` header.
     ```
   </Tab>
 </Tabs>
+
+<Info>
+  With `WithHMACCredentials(...)` set, the SDK automatically generates and sends `lmts-api-key`, `lmts-timestamp`, and `lmts-signature`. Do not manually build HMAC headers when using the SDK client.
+</Info>
 
 <Warning>
   Never hardcode API keys in source code or commit them to version control. Use environment variables or a secrets manager.
@@ -155,7 +174,7 @@ The `HttpClient` uses the functional options pattern. Pass any combination of op
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `WithBaseURL(url)` | `string` | `https://api.limitless.exchange` | API base URL |
-| `WithAPIKey(key)` | `string` | Reads `LIMITLESS_API_KEY` env | API key for authentication |
+| `WithAPIKey(key)` | `string` | Reads `LIMITLESS_API_KEY` env | Legacy API key authentication |
 | `WithHMACCredentials(creds)` | `HMACCredentials` | -- | HMAC credentials for scoped API token auth (see [Programmatic API](/developers/programmatic-api)) |
 | `WithTimeout(d)` | `time.Duration` | `30s` | HTTP request timeout |
 | `WithMaxIdleConns(n)` | `int` | `50` | Maximum idle connections in the pool |
@@ -237,3 +256,18 @@ The SDK is open source. Contributions and issue reports are welcome.
     Retry logic, error types, and debugging strategies.
   </Card>
 </CardGroup>
+
+## Server Wallet Redemption and Withdrawal
+
+For partner server-wallet sub-accounts, redemption and withdrawal endpoints are now live in the API:
+
+- [`POST /portfolio/redeem`](/api-reference/portfolio/redeem)
+- [`POST /portfolio/withdraw`](/api-reference/portfolio/withdraw)
+
+Current SDK status:
+
+- Go SDK helper methods for these two operations are not available yet.
+- Use direct REST calls for now, signed with your scoped HMAC token.
+- Required scopes for `apiToken` auth: `trading` for redeem and `withdrawal` for withdraw.
+
+See the full flow and scope guidance in [Programmatic API](/developers/programmatic-api).

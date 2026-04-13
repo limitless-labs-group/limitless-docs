@@ -190,6 +190,7 @@ const fokOrder = await scopedClient.delegatedOrders.createOrder({
 | `trading` | Place and cancel orders. Default scope. Required base for `delegated_signing`. | Yes |
 | `account_creation` | Create sub-account profiles linked to the partner. | Yes |
 | `delegated_signing` | Server signs orders on behalf of sub-accounts via managed wallets. Must be paired with `trading`. | Yes |
+| `withdrawal` | Transfer ERC20 balances from managed server-wallet sub-accounts to the partner's own addresses. | Yes |
 | `admin` | Access admin-protected endpoints. | No (admin-provisioned only) |
 
 ## Scope requirements by operation
@@ -200,6 +201,8 @@ const fokOrder = await scopedClient.delegatedOrders.createOrder({
 | Create sub-accounts (`POST /profiles/partner-accounts`) | `account_creation` |
 | Create sub-accounts with server wallets (`createServerWallet: true`) | `account_creation` + `delegated_signing` |
 | Submit unsigned orders (server signs) | `trading` + `delegated_signing` |
+| Redeem resolved positions (`POST /portfolio/redeem`) | `trading` |
+| Withdraw funds (`POST /portfolio/withdraw`) | `withdrawal` |
 
 ## Sub-account modes
 
@@ -227,13 +230,16 @@ If your integration checks settlement directly on-chain, wait until the payout v
 
 #### Redemption and withdrawal support
 
-The programmatic API is focused on **account creation**, **delegated order signing**, and **order management**.
+Server wallet partner flows now include direct endpoints for payout settlement and treasury movement:
 
-- There is no partner redemption endpoint for server wallet sub-accounts.
-- The SDK delegated order services do not include a `redeemPositions` helper.
-- There is no partner withdrawal endpoint or partner-facing app UI for managing partner-created sub-accounts.
+- [`POST /portfolio/redeem`](/api-reference/portfolio/redeem) to submit `redeemPositions` for a resolved condition.
+- [`POST /portfolio/withdraw`](/api-reference/portfolio/withdraw) to transfer ERC20 funds from a managed sub-account server wallet to the partner's own account or smart wallet.
 
-Treat server wallet sub-accounts as **backend-managed trading accounts**. If your integration requires self-serve redemption or withdrawal flows for those accounts, coordinate with the Limitless team before depending on that path in production.
+Current status:
+
+- SDK helper methods for these routes are not yet available.
+- Use direct REST calls (HMAC or authenticated session/Privy) for now.
+- Keep these flows backend-managed while SDK coverage is pending.
 
 ### EOA (Web3 partners)
 
@@ -247,6 +253,16 @@ Scopes: `trading` and `account_creation` are sufficient for EOA partner flows. Y
 2. **Persist the mapping in your backend** — save at least `walletAddress → profileId` (and your own user id if you have one). You are **not** storing a Limitless “session object”; you are storing your app’s record so you know which `profileId` to pass on orders. See [What to persist](#what-to-persist-for-eoa-partners) below.
 3. **User signs each order** — build the order per [EIP-712 signing](/developers/eip712-signing) and have the user sign in the browser (e.g. wagmi/viem/ethers). `maker` and `signer` must be the user’s EOA address.
 4. **Submit the order from your backend (HMAC)** — `POST /orders` with HMAC auth, `onBehalfOf` set to the user’s `profileId`, and **`ownerId` set to that same `profileId`** when you send a **signed** order body. The `order`’s `maker` / `signer` must match the sub-account wallet. (If you use **delegated signing** with an unsigned `order`, the server sets `ownerId` for you — that path is for server-wallet sub-accounts, not pure EOA signing.)
+
+#### Common EOA auth error
+
+If `POST /orders` returns `Signer does not match authenticated profile account`, check all three fields point to the same user account:
+
+- `ownerId` = user's `profileId`
+- `onBehalfOf` = same user's `profileId`
+- `order.maker` and `order.signer` = that user's wallet address
+
+Using the partner profile ID in `ownerId` while signing with a user wallet causes this error.
 
 #### Architecture (browser + backend)
 
@@ -290,6 +306,10 @@ There is **no official Next.js sample app** in the public GitHub org today; use 
 | The user’s **private key** | Not required and not recommended; the wallet stays in the user’s client. |
 | A Limitless “login session” to avoid **order** signing | EOA mode requires an **EIP-712 signature per order** (or a new signing policy you implement). You can avoid repeated **registration** by persisting `profileId`. |
 | Partner HMAC `secret` in the browser | Forbidden — keep only on the server. |
+
+<Warning>
+  There is no partner endpoint to list or lookup previously created sub-accounts by wallet address. `GET /profiles/{account}` returns only the authenticated account's own profile. Treat `walletAddress -> profileId` persistence as required integration state.
+</Warning>
 
 **Wallet UX:** Standard wallet connectors remember the user’s connection across visits, so users don’t necessarily “reconnect from scratch” every time — but **each order** still needs a signature unless you move to [server wallet + delegated signing](#server-wallet-web2-partners).
 
@@ -459,10 +479,16 @@ All day-to-day programmatic API calls use HMAC-SHA256 request signing. See the [
 | [`DELETE /auth/api-tokens/{tokenId}`](/api-reference/api-tokens/revoke-token) | Any | Revoke a token |
 | [`POST /profiles/partner-accounts`](/api-reference/partner-accounts/create-partner-account) | HMAC | Create a sub-account |
 | [`POST /orders`](/api-reference/trading/create-order) | HMAC | Place orders (with optional delegated signing) |
+| [`POST /portfolio/redeem`](/api-reference/portfolio/redeem) | Any (`apiToken`, Privy, session) | Redeem resolved positions from a server wallet |
+| [`POST /portfolio/withdraw`](/api-reference/portfolio/withdraw) | Any (`apiToken`, Privy, session) | Withdraw ERC20 funds from a server wallet |
 
 ## SDK support
 
 All three official SDKs provide built-in support for the programmatic API:
+
+<Info>
+  Redemption and withdrawal are currently API-only for partner server-wallet flows (`POST /portfolio/redeem`, `POST /portfolio/withdraw`). SDK helper methods for these two routes are not yet available.
+</Info>
 
 <CardGroup cols={3}>
   <Card title="TypeScript" icon="js" href="/developers/sdk/typescript/api-tokens">

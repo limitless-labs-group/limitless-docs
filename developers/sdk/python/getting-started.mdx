@@ -80,7 +80,10 @@ pip install limitless-sdk
 
 ## Authentication
 
-The SDK authenticates using an API key passed via the `X-API-Key` header.
+The SDK supports both authentication modes:
+
+- Legacy API key (`X-API-Key`)
+- Scoped token HMAC (`lmts-api-key`, `lmts-timestamp`, `lmts-signature`) for partner/programmatic integrations
 
 <Tabs>
   <Tab title="Environment variable (recommended)">
@@ -94,6 +97,21 @@ The SDK authenticates using an API key passed via the `X-API-Key` header.
     http_client = HttpClient()  # auto-loads LIMITLESS_API_KEY
     ```
   </Tab>
+  <Tab title="HMAC (partner/programmatic)">
+    Use the root client with scoped token credentials:
+
+    ```python
+    from limitless_sdk import Client, HMACCredentials
+
+    client = Client(
+        base_url="https://api.limitless.exchange",
+        hmac_credentials=HMACCredentials(
+            token_id="your-token-id",
+            secret="your-base64-secret",
+        ),
+    )
+    ```
+  </Tab>
   <Tab title="Explicit parameter">
     Pass `api_key` directly to the constructor:
 
@@ -102,6 +120,10 @@ The SDK authenticates using an API key passed via the `X-API-Key` header.
     ```
   </Tab>
 </Tabs>
+
+<Info>
+  With `hmac_credentials` set, the SDK automatically generates and sends `lmts-api-key`, `lmts-timestamp`, and `lmts-signature`. Do not manually build HMAC headers when using the SDK client.
+</Info>
 
 <Warning>
   Never hardcode API keys in source code or commit them to version control. Use environment variables or a secrets manager.
@@ -134,7 +156,7 @@ client = Client(
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `base_url` | `str` | `https://api.limitless.exchange` | API base URL |
-| `api_key` | `str \| None` | `None` (reads `LIMITLESS_API_KEY` env) | API key for authentication |
+| `api_key` | `str \| None` | `None` (reads `LIMITLESS_API_KEY` env) | Legacy API key authentication |
 | `hmac_credentials` | `HMACCredentials \| None` | `None` | HMAC credentials for scoped API token auth (see [Programmatic API](/developers/programmatic-api)) |
 | `additional_headers` | `dict \| None` | `None` | Extra headers merged into every request |
 
@@ -221,3 +243,18 @@ The SDK is open source. Contributions and issue reports are welcome.
     Retry logic, error types, and debugging strategies.
   </Card>
 </CardGroup>
+
+## Server Wallet Redemption and Withdrawal
+
+For partner server-wallet sub-accounts, redemption and withdrawal endpoints are now live in the API:
+
+- [`POST /portfolio/redeem`](/api-reference/portfolio/redeem)
+- [`POST /portfolio/withdraw`](/api-reference/portfolio/withdraw)
+
+Current SDK status:
+
+- Python SDK helper methods for these two operations are not available yet.
+- Use direct REST calls for now, signed with your scoped HMAC token.
+- Required scopes for `apiToken` auth: `trading` for redeem and `withdrawal` for withdraw.
+
+See the full flow and scope guidance in [Programmatic API](/developers/programmatic-api).

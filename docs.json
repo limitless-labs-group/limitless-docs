@@ -189,6 +189,8 @@
               "api-reference/portfolio/get-profile",
               "api-reference/portfolio/trades",
               "api-reference/portfolio/positions",
+              "api-reference/portfolio/redeem",
+              "api-reference/portfolio/withdraw",
               "api-reference/portfolio/pnl-chart",
               "api-reference/portfolio/history",
               "api-reference/portfolio/points",

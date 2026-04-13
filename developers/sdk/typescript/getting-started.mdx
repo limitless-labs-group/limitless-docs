@@ -41,6 +41,9 @@ pnpm add @limitless-exchange/sdk
 ```bash
 LIMITLESS_API_KEY=lmts_your_api_key_here
 PRIVATE_KEY=0xYourPrivateKeyHere
+# Partner/programmatic mode (HMAC)
+LMTS_TOKEN_ID=your_token_id
+LMTS_TOKEN_SECRET=your_base64_secret
 ```
 
   The SDK automatically reads `LIMITLESS_API_KEY` from the environment if no `apiKey` is passed to the constructor.
@@ -94,7 +97,9 @@ const wallet = new ethers.Wallet(process.env.PRIVATE_KEY!);
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `LIMITLESS_API_KEY` | For authenticated endpoints | Auto-loaded by the SDK. Generate at [limitless.exchange](https://limitless.exchange) under profile menu. |
+| `LIMITLESS_API_KEY` | Legacy auth only | Deprecated API key value, auto-loaded by the SDK. |
+| `LMTS_TOKEN_ID` | Partner/programmatic mode | Scoped token ID used for HMAC request signing. |
+| `LMTS_TOKEN_SECRET` | Partner/programmatic mode | Base64 token secret used for HMAC request signing. |
 | `PRIVATE_KEY` | For order signing | Ethereum private key used for EIP-712 order signatures. Never commit to version control. |
 
 ## Client constructor
@@ -116,16 +121,20 @@ For partner integrations using HMAC authentication:
 const client = new Client({
   baseURL: 'https://api.limitless.exchange',
   hmacCredentials: {
-    tokenId: 'your-token-id',
-    secret: 'your-base64-secret',
+    tokenId: process.env.LMTS_TOKEN_ID!,
+    secret: process.env.LMTS_TOKEN_SECRET!,
   },
 });
 ```
 
+<Info>
+  With `hmacCredentials` set, the SDK automatically generates and sends `lmts-api-key`, `lmts-timestamp`, and `lmts-signature` on each request. Do not manually build HMAC headers when using the SDK client.
+</Info>
+
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `baseURL` | `string` | -- | API base URL |
-| `apiKey` | `string` | `process.env.LIMITLESS_API_KEY` | API key for authentication |
+| `apiKey` | `string` | `process.env.LIMITLESS_API_KEY` | Legacy API key authentication |
 | `hmacCredentials` | `{ tokenId, secret }` | -- | HMAC credentials for scoped API token auth (see [Programmatic API](/developers/programmatic-api)) |
 | `timeout` | `number` | `30000` | Request timeout in milliseconds |
 | `additionalHeaders` | `Record<string, string>` | `{}` | Additional headers sent with every request |
@@ -171,6 +180,21 @@ const httpClient = new HttpClient({
     Real-time orderbook, price, position, and transaction events.
   </Card>
 </CardGroup>
+
+## Server Wallet Redemption and Withdrawal
+
+For partner server-wallet sub-accounts, redemption and withdrawal endpoints are now live in the API:
+
+- [`POST /portfolio/redeem`](/api-reference/portfolio/redeem)
+- [`POST /portfolio/withdraw`](/api-reference/portfolio/withdraw)
+
+Current SDK status:
+
+- TypeScript SDK helper methods for these two operations are not available yet.
+- Use direct REST calls for now, signed with your scoped HMAC token.
+- Required scopes for `apiToken` auth: `trading` for redeem and `withdrawal` for withdraw.
+
+See the full flow and scope guidance in [Programmatic API](/developers/programmatic-api).
 
 ## Disclaimer
 

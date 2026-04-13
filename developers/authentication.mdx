@@ -22,6 +22,7 @@ Scoped API tokens are the authentication method for the Limitless Exchange API. 
 | `trading` | Place and cancel orders. Required base scope for `delegated_signing`. |
 | `account_creation` | Create sub-account profiles under your partner account. |
 | `delegated_signing` | Server signs orders on behalf of sub-accounts (requires `trading` scope). Enables Web2 partners to submit orders without end users managing private keys. |
+| `withdrawal` | Withdraw ERC20 balances from managed server-wallet sub-accounts to partner-owned addresses. |
 
 ### HMAC Request Signing
 
@@ -32,6 +33,10 @@ Scoped API tokens are the authentication method for the Limitless Exchange API. 
 | `lmts-api-key` | Your token ID (received at token creation) |
 | `lmts-timestamp` | ISO-8601 timestamp (must be within 30 seconds of server time) |
 | `lmts-signature` | Base64-encoded HMAC-SHA256 signature |
+
+<Info>
+  SDK users should pass HMAC credentials to the SDK client (`hmacCredentials` / `hmac_credentials` / `WithHMACCredentials`) and let the SDK build these headers automatically. Manual header signing is only needed when you call the REST API directly.
+</Info>
 
 **Canonical message format:**
 
