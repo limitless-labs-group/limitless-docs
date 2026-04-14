@@ -5,6 +5,10 @@ description: "Partner integrations with scoped API tokens, sub-account managemen
 
 The Programmatic API enables partners to build integrations that create and manage user accounts, place orders on behalf of users, and operate with fine-grained access control — all through HMAC-authenticated API tokens with scoped permissions.
 
+<Info>
+  **Building a bot or trading for yourself?** You do not need to apply for the Programmatic API. Derive a scoped API token with the `trading` scope from the [Authentication](/developers/authentication) page and start trading immediately. The Programmatic API and the application below are for **platforms and partners** that need to create and manage sub-accounts on behalf of their users.
+</Info>
+
 <Warning>
   HMAC credentials contain a secret key and must only be used in **backend or BFF** environments. Never expose them in browser-side code.
 </Warning>
