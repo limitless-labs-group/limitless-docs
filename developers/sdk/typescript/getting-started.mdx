@@ -183,16 +183,12 @@ const httpClient = new HttpClient({
 
 ## Server Wallet Redemption and Withdrawal
 
-For partner server-wallet sub-accounts, redemption and withdrawal endpoints are now live in the API:
+For partner server-wallet sub-accounts, the SDK now provides helper methods for payout settlement and treasury movement (v1.0.6+):
 
-- [`POST /portfolio/redeem`](/api-reference/portfolio/redeem)
-- [`POST /portfolio/withdraw`](/api-reference/portfolio/withdraw)
+- [`POST /portfolio/redeem`](/api-reference/portfolio/redeem) — claim resolved positions
+- [`POST /portfolio/withdraw`](/api-reference/portfolio/withdraw) — transfer ERC20 funds from managed sub-accounts
 
-Current SDK status:
-
-- TypeScript SDK helper methods for these two operations are not available yet.
-- Use direct REST calls for now, signed with your scoped HMAC token.
-- Required scopes for `apiToken` auth: `trading` for redeem and `withdrawal` for withdraw.
+Required scopes for `apiToken` auth: `trading` for redeem and `withdrawal` for withdraw.
 
 See the full flow and scope guidance in [Programmatic API](/developers/programmatic-api).
 

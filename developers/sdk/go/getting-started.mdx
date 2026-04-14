@@ -20,7 +20,7 @@ The Limitless Exchange Go SDK (`limitless-exchange-go-sdk`) is a fully typed Go 
 ## Installation
 
 ```bash
-go get github.com/limitless-labs-group/limitless-exchange-go-sdk@v1.0.5
+go get github.com/limitless-labs-group/limitless-exchange-go-sdk@v1.0.6
 ```
 
 ## Quick Start
@@ -259,15 +259,11 @@ The SDK is open source. Contributions and issue reports are welcome.
 
 ## Server Wallet Redemption and Withdrawal
 
-For partner server-wallet sub-accounts, redemption and withdrawal endpoints are now live in the API:
+For partner server-wallet sub-accounts, the SDK now provides helper methods for payout settlement and treasury movement (v1.0.6+):
 
-- [`POST /portfolio/redeem`](/api-reference/portfolio/redeem)
-- [`POST /portfolio/withdraw`](/api-reference/portfolio/withdraw)
+- [`POST /portfolio/redeem`](/api-reference/portfolio/redeem) — claim resolved positions
+- [`POST /portfolio/withdraw`](/api-reference/portfolio/withdraw) — transfer ERC20 funds from managed sub-accounts
 
-Current SDK status:
-
-- Go SDK helper methods for these two operations are not available yet.
-- Use direct REST calls for now, signed with your scoped HMAC token.
-- Required scopes for `apiToken` auth: `trading` for redeem and `withdrawal` for withdraw.
+Required scopes for `apiToken` auth: `trading` for redeem and `withdrawal` for withdraw.
 
 See the full flow and scope guidance in [Programmatic API](/developers/programmatic-api).

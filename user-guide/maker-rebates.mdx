@@ -72,7 +72,7 @@ Rebates are performance-based: the more eligible fee-generating maker fills you 
 
 ## Example
 
-Assume **Hourly Crypto** and **15-minute Crypto** markets are configured with a **20% rebate rate** (i.e., 20% of eligible taker fees funds the rebate pool for those markets).
+Assume **Hourly Crypto** and **15-minute Crypto** markets are configured with a **100% rebate rate** (i.e., 100% of eligible taker fees funds the rebate pool for those markets).
 
 During one UTC day, the following trades execute in an eligible hourly or 15-minute market:
 
@@ -95,19 +95,19 @@ During one UTC day, the following trades execute in an eligible hourly or 15-min
 
     \$12.00 + \$5.50 + \$10.40 = **\$27.90**
 
-    Hourly / 15-minute Crypto rebate rate = **20%**
+    Hourly / 15-minute Crypto rebate rate = **100%**
 
-    Daily rebate pool (this market) = 20% × \$27.90 = **\$5.58 USDC**
+    Daily rebate pool (this market) = 100% × \$27.90 = **\$27.90 USDC**
   </Step>
   <Step title="The rebate pool is distributed pro-rata">
     Each maker receives a share of the rebate pool proportional to their share of the day's rebate credit:
 
-    - **Maker A share:** 22.40 / 27.90 = **80.29%** → **\$4.48 USDC**
-    - **Maker B share:** 5.50 / 27.90 = **19.71%** → **\$1.10 USDC**
+    - **Maker A share:** 22.40 / 27.90 = **80.29%** → **\$22.40 USDC**
+    - **Maker B share:** 5.50 / 27.90 = **19.71%** → **\$5.50 USDC**
   </Step>
 </Steps>
 
-The market generated **\$27.90** in eligible taker fees, **\$5.58 USDC** was allocated to the rebate pool (20%), and that amount was split between makers based on their contribution to the day's eligible fee-generating fills.
+The market generated **\$27.90** in eligible taker fees, **\$27.90 USDC** was allocated to the rebate pool (100%), and that amount was split between makers based on their contribution to the day's eligible fee-generating fills.
 
 ## Eligibility
 
@@ -135,15 +135,11 @@ Eligibility may be configured by:
 
 ### Current program parameters
 
-<Note>
-  Rebates across all daily markets are set to 100%. In 24 hours, all markets will refresh with new values.
-</Note>
-
 | Market                       | Rebate rate                 |
 | ---------------------------- | --------------------------- |
 | **Daily markets**            | 100% of eligible taker fees |
-| **Hourly Crypto**            | 20% of eligible taker fees  |
-| **15-minute Crypto markets** | 20% of eligible taker fees  |
+| **Hourly Crypto**            | 100% of eligible taker fees |
+| **15-minute Crypto markets** | 100% of eligible taker fees |
 
 ## Funding and program economics
 

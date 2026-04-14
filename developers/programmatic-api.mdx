@@ -235,11 +235,7 @@ Server wallet partner flows now include direct endpoints for payout settlement a
 - [`POST /portfolio/redeem`](/api-reference/portfolio/redeem) to submit `redeemPositions` for a resolved condition.
 - [`POST /portfolio/withdraw`](/api-reference/portfolio/withdraw) to transfer ERC20 funds from a managed sub-account server wallet to the partner's own account or smart wallet.
 
-Current status:
-
-- SDK helper methods for these routes are not yet available.
-- Use direct REST calls (HMAC or authenticated session/Privy) for now.
-- Keep these flows backend-managed while SDK coverage is pending.
+As of SDK v1.0.6, all three SDKs provide helper methods for server wallet claim (redeem) and withdrawal. See the SDK getting-started pages for details.
 
 ### EOA (Web3 partners)
 
@@ -487,7 +483,7 @@ All day-to-day programmatic API calls use HMAC-SHA256 request signing. See the [
 All three official SDKs provide built-in support for the programmatic API:
 
 <Info>
-  Redemption and withdrawal are currently API-only for partner server-wallet flows (`POST /portfolio/redeem`, `POST /portfolio/withdraw`). SDK helper methods for these two routes are not yet available.
+  As of SDK v1.0.6, all three SDKs include helper methods for server wallet claim (`POST /portfolio/redeem`) and withdrawal (`POST /portfolio/withdraw`).
 </Info>
 
 <CardGroup cols={3}>

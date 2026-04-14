@@ -5,6 +5,21 @@ description: "Notable changes to the Limitless Exchange platform, API, and SDKs"
 
 Welcome to the Limitless Changelog. Here you'll find important changes to the Limitless Exchange platform including API updates, SDK releases, and new features.
 
+## Apr 14, 2026
+
+### SDK v1.0.6: Server Wallet Claim & 100% Maker Rebates
+
+**Server wallet claim (all SDKs):**
+- All three SDKs (TypeScript, Python, Go) now include helper methods for server wallet redemption and withdrawal
+- `redeem` — claim resolved conditional-token positions from managed sub-accounts
+- `withdraw` — transfer ERC20 funds from managed sub-accounts to partner wallets
+- Previously these operations required direct REST calls; now fully supported in the SDK
+
+**Maker Rebates program update:**
+- Rebate rate increased to **100%** across all market types (daily, hourly crypto, 15-minute crypto)
+
+**Documentation:** [Programmatic API](/developers/programmatic-api) | [TypeScript SDK](/developers/sdk/typescript/getting-started) | [Python SDK](/developers/sdk/python/getting-started) | [Go SDK](/developers/sdk/go/getting-started) | [Maker Rebates](/user-guide/maker-rebates)
+
 ## Apr 2, 2026
 
 ### Programmatic API: Partner Integrations, Delegated Signing & FOK Orders
@@ -31,7 +46,7 @@ Major new capability for partners building on Limitless. The Programmatic API en
 
 **Documentation:** [Programmatic API guide](/developers/programmatic-api) | [Authentication](/developers/authentication#scoped-api-tokens-hmac) | [API Tokens reference](/api-reference/api-tokens/derive-token)
 
-### SDK v1.0.4: Programmatic API Support (TypeScript, Python, Go)
+### SDK v1.0.4–1.0.5: Programmatic API Support (TypeScript, Python, Go)
 
 All three official SDKs now include full support for the Programmatic API:
 
