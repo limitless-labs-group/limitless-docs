@@ -15,42 +15,88 @@ Build on Limitless with **REST** and **WebSocket** APIs for programmatic trading
   The `/api-v1` path serves the interactive Scalar API documentation. For actual API calls, use the base URL directly (e.g., `GET https://api.limitless.exchange/markets/active`).
 </Note>
 
-## Capabilities
+## Choose your path
 
-<CardGroup cols={3}>
-  <Card title="REST API" icon="server">
-    - Authenticate with scoped API tokens
-    - Fetch market data and venue info
-    - Create, sign, and submit orders (EIP-712)
-    - Manage portfolio and positions
+<CardGroup cols={2}>
+  <Card title="Individual Trader / Bot" icon="user" href="#trading-for-yourself">
+    You want to trade on Limitless programmatically — placing orders with your own wallet via a bot, script, or agent. **You do not need to apply for anything.** Get an API key from the UI and start trading.
   </Card>
-  <Card title="WebSocket API" icon="plug">
-    - Real-time market price updates
-    - Orderbook streaming for CLOB markets
-    - Position change notifications
-  </Card>
-  <Card title="Programmatic API" icon="code">
-    - HMAC-scoped partner tokens
-    - Sub-account management
-    - Delegated signing (GTC and FOK orders)
-    - Server-managed wallets
+  <Card title="Platform / Partner" icon="building" href="#building-a-platform">
+    You are building a product where **other users** trade through your platform. You need sub-accounts, delegated signing, or managed wallets. **Requires a partner application.**
   </Card>
 </CardGroup>
 
-## Quick Navigation
+---
+
+## Trading for yourself
+
+If you are an individual trader, bot operator, or agent builder, this is your path. You trade with your own wallet and sign your own orders.
+
+### How it works
+
+<Steps>
+
+<Step title="Get an API key">
+  Generate an API key from the [Limitless Exchange UI](https://limitless.exchange) → profile menu → Api keys. Use it as the `X-API-Key` header on all requests.
+</Step>
+
+<Step title="Fetch market data">
+  `GET /markets/:slug` returns market info including **venue contract addresses** (fetch once per market and cache).
+</Step>
+
+<Step title="Build and sign orders">
+  Construct order payloads and sign with **EIP-712** using the venue's exchange address as `verifyingContract`.
+</Step>
+
+<Step title="Submit orders">
+  `POST /orders` with your signed order, `ownerId` (your profile ID from `GET /profiles/{address}`), `orderType`, and `marketSlug`.
+</Step>
+
+</Steps>
+
+### Get started
 
 <CardGroup cols={2}>
   <Card title="Authentication" icon="key" href="/developers/authentication">
-    Scoped API tokens, HMAC signing, and authentication flow.
-  </Card>
-  <Card title="Programmatic API" icon="code" href="/developers/programmatic-api">
-    Partner tokens, sub-accounts, and delegated signing.
+    API keys, scoped tokens, and how auth works.
   </Card>
   <Card title="Python Quick Start" icon="python" href="/developers/quickstart/python">
     End-to-end trading in Python.
   </Card>
   <Card title="Node.js Quick Start" icon="js" href="/developers/quickstart/nodejs">
     TypeScript/Node.js integration with viem.
+  </Card>
+  <Card title="EIP-712 Signing" icon="pen" href="/developers/eip712-signing">
+    How to sign orders for the CLOB.
+  </Card>
+</CardGroup>
+
+---
+
+## Building a platform
+
+If you are a partner building a product where other users trade through your platform, this is your path. You manage sub-accounts on behalf of your users and optionally use delegated signing so your users never need to manage private keys.
+
+<Info>
+  **You must apply for Programmatic API access** before you can create sub-accounts or use delegated signing. Individual trading with your own wallet does not require an application.
+</Info>
+
+### What you get
+
+| Capability | Description |
+|------------|-------------|
+| **Scoped API tokens** | HMAC-SHA256 authenticated tokens with granular scopes (`trading`, `account_creation`, `delegated_signing`) |
+| **Partner sub-accounts** | Create and manage user profiles linked to your partner account |
+| **Delegated signing** | Submit orders without end users managing private keys — the server signs via a managed wallet |
+
+### Get started
+
+<CardGroup cols={2}>
+  <Card title="Programmatic API" icon="code" href="/developers/programmatic-api">
+    Full guide: partner lifecycle, sub-accounts, delegated signing, and order types.
+  </Card>
+  <Card title="Authentication (HMAC)" icon="key" href="/developers/authentication#hmac-request-signing">
+    HMAC signing protocol for partner API tokens.
   </Card>
   <Card title="Migrate from Polymarket" icon="arrow-right" href="/developers/migrate-from-polymarket">
     Map Polymarket concepts to Limitless equivalents.
@@ -60,9 +106,11 @@ Build on Limitless with **REST** and **WebSocket** APIs for programmatic trading
   </Card>
 </CardGroup>
 
+---
+
 ## Official SDKs
 
-Use the official clients for authentication, EIP-712 order signing, market data, portfolio, WebSockets, and the programmatic API.
+All SDKs support both individual trading and partner integrations.
 
 <CardGroup cols={3}>
   <Card title="TypeScript SDK" icon="js" href="/developers/sdk/typescript/getting-started">
@@ -76,24 +124,16 @@ Use the official clients for authentication, EIP-712 order signing, market data,
   </Card>
 </CardGroup>
 
-## How Trading Works
+## Additional resources
 
-<Steps>
-
-<Step title="Authenticate">
-  Use your **API key** (`X-API-Key` header) for all requests. Generate keys via the [Limitless Exchange UI](https://limitless.exchange) → profile menu → Api keys.
-</Step>
-
-<Step title="Fetch Market Data">
-  `GET /markets/:slug` returns market info including **venue contract addresses** (fetch once per market and cache).
-</Step>
-
-<Step title="Build & Sign Orders">
-  Construct order payloads and sign with **EIP-712** using the venue's exchange address as `verifyingContract`.
-</Step>
-
-<Step title="Submit Orders">
-  `POST /orders` to submit signed orders and receive confirmations.
-</Step>
-
-</Steps>
+<CardGroup cols={3}>
+  <Card title="Venue System" icon="sitemap" href="/developers/venue-system">
+    Contract addresses and token approvals.
+  </Card>
+  <Card title="WebSocket API" icon="plug" href="/developers/quickstart/websocket">
+    Real-time market and orderbook streaming.
+  </Card>
+  <Card title="Java Quick Start" icon="java" href="/developers/quickstart/java">
+    End-to-end trading in Java.
+  </Card>
+</CardGroup>

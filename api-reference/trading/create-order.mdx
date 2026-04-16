@@ -18,6 +18,10 @@ openapi: "POST /orders"
 | `onBehalfOf` | `number` | Profile ID of the sub-account to place the order for. Requires a [scoped API token](/developers/authentication#scoped-api-tokens-hmac) with `trading` scope and a partner relationship with the target profile. The `maker` and `signer` in the order must match the sub-account's wallet address. |
 | `postOnly` | `boolean` | GTC orders only. When `true`, the order is rejected if it would immediately match. Guarantees the order rests on the book as a maker order. Default `false`. |
 
+<Info>
+  **Where does `ownerId` come from?** It is the `id` field returned by [`GET /profiles/{address}`](/api-reference/portfolio/get-profile). For partner sub-accounts, it is the `profileId` returned by [`POST /profiles/partner-accounts`](/api-reference/partner-accounts/create-partner-account).
+</Info>
+
 <Warning>
   **`ownerId` must match the profile that owns the order** (see [Programmatic API — EOA flow](/developers/programmatic-api#eoa-web3-partners)):
   - **Partner EOA + signed order + `onBehalfOf`:** set both `onBehalfOf` and `ownerId` to the **sub-account’s** `profileId`. `order.maker` and `order.signer` must match that sub-account’s wallet. A mismatched `ownerId` returns `400` — `"Profile ID does not match the order owner"`.
