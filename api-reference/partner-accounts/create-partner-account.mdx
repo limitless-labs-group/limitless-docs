@@ -33,8 +33,79 @@ EOA mode requires three additional headers for wallet ownership verification:
 | Header | Description |
 |--------|-------------|
 | `x-account` | Checksummed Ethereum address (EIP-55) |
-| `x-signing-message` | Hex-encoded signing message |
-| `x-signature` | Hex-encoded signature from the wallet |
+| `x-signing-message` | Hex-encoded signing message obtained from `GET /auth/signing-message` |
+| `x-signature` | Hex-encoded signature produced by signing the message with the wallet |
+
+#### Signing message format
+
+The `x-signing-message` value is **not** the raw text — it is the **hex-encoded** UTF-8 representation of the message returned by `GET /auth/signing-message`. The raw text (which you sign) looks like:
+
+```
+Welcome to Limitless Exchange!
+
+This request will not trigger a blockchain transaction or cost any gas fees.
+
+Signature is required to authenticate an upcoming API request.
+
+Nonce: 0x<keccak256-hash>
+```
+
+The full flow:
+
+1. **Fetch** the signing message: `GET /auth/signing-message` → returns the plain-text message with a unique nonce.
+2. **Sign** the plain-text message with the wallet (e.g. `personal_sign` / `eth_sign`).
+3. **Hex-encode** the plain-text message: prepend `0x` to the UTF-8 hex representation.
+4. **Send** all three headers on the request.
+
+<CodeGroup>
+
+```python Python
+import requests
+from eth_account import Account
+from eth_account.messages import encode_defunct
+
+# 1. Fetch the signing message
+signing_message = requests.get(f"{API_BASE_URL}/auth/signing-message").text
+
+# 2. Sign the plain-text message
+message = encode_defunct(text=signing_message)
+signed = account.sign_message(message)
+
+# 3. Hex-encode the message for the header
+hex_message = "0x" + signing_message.encode("utf-8").hex()
+
+# 4. Use in headers
+headers = {
+    "x-account": account.address,                # checksummed address
+    "x-signing-message": hex_message,             # hex-encoded message
+    "x-signature": "0x" + signed.signature.hex(), # hex-encoded signature
+}
+```
+
+```typescript TypeScript
+import { createWalletClient, http, toHex } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { base } from 'viem/chains';
+
+// 1. Fetch the signing message
+const signingMessage = await fetch(`${API_BASE_URL}/auth/signing-message`).then(r => r.text());
+
+// 2. Sign the plain-text message
+const account = privateKeyToAccount(PRIVATE_KEY);
+const signature = await account.signMessage({ message: signingMessage });
+
+// 3. Hex-encode the message for the header
+const hexMessage = toHex(new TextEncoder().encode(signingMessage));
+
+// 4. Use in headers
+const headers = {
+  'x-account': account.address,      // checksummed address
+  'x-signing-message': hexMessage,   // hex-encoded message
+  'x-signature': signature,          // hex-encoded signature
+};
+```
+
+</CodeGroup>
 
 ```json
 {
