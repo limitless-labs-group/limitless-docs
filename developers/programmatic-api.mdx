@@ -465,6 +465,56 @@ if len(response.MakerMatches) > 0 {
 
 </CodeGroup>
 
+## Reading sub-account data
+
+Partners can read portfolio, order, and position data for their sub-accounts using the `x-on-behalf-of` header. This lets you show users their positions, trade history, and order status without requiring the sub-account to authenticate directly.
+
+### How it works
+
+Add the `x-on-behalf-of` header with the sub-account's `profileId` to any supported read endpoint. The response is exactly what the sub-account would see if they called the endpoint themselves.
+
+```http
+GET /portfolio/positions HTTP/1.1
+Host: api.limitless.exchange
+lmts-api-key: <your-token-id>
+lmts-signature: <hmac-signature>
+lmts-timestamp: <unix-ms>
+x-on-behalf-of: 1292711
+```
+
+### Requirements
+
+1. **Scope** — your API token must include the `delegated_signing` scope.
+2. **Ownership** — the target profile must be a sub-account linked to your partner profile.
+3. **Auth** — use your existing HMAC flow (`lmts-api-key`, `lmts-signature`, `lmts-timestamp`). Nothing new.
+
+### Supported endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/portfolio/positions` | Sub-account's current positions |
+| GET | `/portfolio/history` | Sub-account's trade history |
+| GET | `/markets/:slug/user-orders` | Sub-account's orders for a specific market |
+| POST | `/orders/status/batch` | Batch order status check |
+
+More read endpoints will be enabled over time.
+
+### Without the header
+
+If you omit `x-on-behalf-of`, these endpoints behave exactly as before — you read your own data. The header is purely additive.
+
+### Error responses
+
+| Status | When |
+|--------|------|
+| `200` | Success — data is for the target sub-account |
+| `400` | Invalid header value or endpoint does not support delegation |
+| `403` | Token lacks `delegated_signing` scope, or target profile is not your sub-account |
+
+<Warning>
+  Error messages on `403` are intentionally generic — the API does not confirm or deny the existence of specific profile IDs.
+</Warning>
+
 ## HMAC authentication
 
 All day-to-day programmatic API calls use HMAC-SHA256 request signing. See the [Authentication](/developers/authentication#hmac-request-signing) page for the signing protocol, canonical message format, and code examples.
@@ -479,6 +529,10 @@ All day-to-day programmatic API calls use HMAC-SHA256 request signing. See the [
 | [`DELETE /auth/api-tokens/{tokenId}`](/api-reference/api-tokens/revoke-token) | Any | Revoke a token |
 | [`POST /profiles/partner-accounts`](/api-reference/partner-accounts/create-partner-account) | HMAC | Create a sub-account |
 | [`POST /orders`](/api-reference/trading/create-order) | HMAC | Place orders (with optional delegated signing) |
+| [`GET /portfolio/positions`](/api-reference/portfolio/positions) | HMAC | Read positions (supports `x-on-behalf-of` for sub-accounts) |
+| [`GET /portfolio/history`](/api-reference/portfolio/history) | HMAC | Read trade history (supports `x-on-behalf-of` for sub-accounts) |
+| [`GET /markets/:slug/user-orders`](/api-reference/trading/user-orders) | HMAC | Read user orders for a market (supports `x-on-behalf-of` for sub-accounts) |
+| [`POST /orders/status/batch`](/api-reference/trading/order-status-batch) | HMAC | Batch order status (supports `x-on-behalf-of` for sub-accounts) |
 | [`POST /portfolio/redeem`](/api-reference/portfolio/redeem) | Any (`apiToken`, Privy, session) | Redeem resolved positions from a server wallet |
 | [`POST /portfolio/withdraw`](/api-reference/portfolio/withdraw) | Any (`apiToken`, Privy, session) | Withdraw ERC20 funds from a server wallet |
 
