@@ -1367,49 +1367,29 @@
     },
     "/portfolio/history": {
       "get": {
-        "description": "Paginated history including AMM, CLOB trades, splits/merges, NegRisk conversions",
+        "description": "Paginated history including AMM, CLOB trades, splits/merges, NegRisk conversions. Partner API tokens with `delegated_signing` scope may read a sub-account by sending the `x-on-behalf-of: <profileId>` header.",
         "operationId": "PortfolioController_getHistory",
         "parameters": [
           {
-            "name": "page",
-            "required": true,
+            "name": "cursor",
+            "required": false,
             "in": "query",
-            "description": "Page number",
+            "description": "Opaque cursor for cursor-based pagination. Omit for first page. For subsequent pages, pass the `nextCursor` value from the previous response.",
             "schema": {
-              "example": 1,
-              "type": "number"
+              "type": "string"
             }
           },
           {
             "name": "limit",
-            "required": true,
+            "required": false,
             "in": "query",
-            "description": "Number of items per page",
+            "description": "Number of items per page (1-100).",
             "schema": {
-              "example": 10,
+              "example": 20,
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100,
               "type": "number"
-            }
-          },
-          {
-            "name": "from",
-            "required": false,
-            "in": "query",
-            "description": "Start date for filtering (ISO 8601 format)",
-            "schema": {
-              "format": "date-time",
-              "example": "2024-01-01T00:00:00.000Z",
-              "type": "string"
-            }
-          },
-          {
-            "name": "to",
-            "required": false,
-            "in": "query",
-            "description": "End date for filtering (ISO 8601 format)",
-            "schema": {
-              "format": "date-time",
-              "example": "2024-12-31T23:59:59.999Z",
-              "type": "string"
             }
           }
         ],
@@ -3742,15 +3722,15 @@
               "$ref": "#/components/schemas/HistoryEntryDto"
             }
           },
-          "totalCount": {
-            "type": "number",
-            "description": "Total count of entries",
-            "example": 8
+          "nextCursor": {
+            "type": "string",
+            "description": "Opaque cursor for the next page. `null` when there are no more pages. Pass this value back as the `cursor` query parameter to fetch the next page.",
+            "nullable": true,
+            "example": "eyJ0Ijoi..."
           }
         },
         "required": [
-          "data",
-          "totalCount"
+          "data"
         ]
       },
       "NavigationNodeDto": {
