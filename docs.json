@@ -130,6 +130,21 @@
             ]
           },
           {
+            "group": "Rust SDK",
+            "pages": [
+              "developers/sdk/rust/getting-started",
+              "developers/sdk/rust/markets",
+              "developers/sdk/rust/market-pages",
+              "developers/sdk/rust/orders",
+              "developers/sdk/rust/portfolio",
+              "developers/sdk/rust/api-tokens",
+              "developers/sdk/rust/partner-accounts",
+              "developers/sdk/rust/delegated-orders",
+              "developers/sdk/rust/websocket",
+              "developers/sdk/rust/error-handling"
+            ]
+          },
+          {
             "group": "WebSocket",
             "pages": [
               "developers/websocket-events"

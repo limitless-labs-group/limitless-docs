@@ -1,0 +1,291 @@
+---
+title: "Trading & Orders"
+description: "Create and manage orders with the Rust SDK"
+---
+
+## Overview
+
+The Rust SDK provides `OrderClient` for order creation, EIP-712 signing, and order management. It supports:
+
+- `OrderType::Gtc` for resting limit orders
+- `OrderType::Fak` for fill-and-kill limit orders
+- `OrderType::Fok` for fill-or-kill market orders
+
+## Prerequisites
+
+Before placing orders, you need:
+
+- an authenticated `Client`
+- a private key for EIP-712 signing
+- market venue data (fetched via `get_market()` and cached automatically)
+
+```rust
+use limitless_exchange_rust_sdk::Client;
+
+let client = Client::new()?;
+let private_key = std::env::var("PRIVATE_KEY")?;
+
+let order_client = client.new_order_client(&private_key, None)?;
+```
+
+<Note>
+  The `OrderClient` lazily fetches your profile on the first order to determine your `owner_id` and fee rate. `CHAIN_ID` defaults to `8453` (Base mainnet) unless you override it.
+</Note>
+
+## Token Approvals
+
+Before your first trade on a given venue, you must approve the exchange contracts to spend your tokens. This is a **one-time on-chain setup** per venue.
+
+<Tabs>
+  <Tab title="Standard CLOB">
+    Approve USDC and Conditional Tokens to the **exchange** contract:
+
+    ```rust
+    let market = client.markets.get_market("your-market-slug").await?;
+    let exchange = market
+        .venue
+        .as_ref()
+        .expect("venue")
+        .exchange
+        .clone();
+
+    println!("approve USDC and CTF to {}", exchange);
+    ```
+  </Tab>
+  <Tab title="NegRisk">
+    NegRisk markets also require Conditional Token approval to the **adapter** contract:
+
+    ```rust
+    let market = client.markets.get_market("your-negrisk-slug").await?;
+    let venue = market.venue.as_ref().expect("venue");
+
+    println!("exchange {}", venue.exchange);
+    println!("adapter {}", venue.adapter.as_ref().expect("adapter"));
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Approvals are on-chain transactions that cost gas. Use `venue.exchange` for both CLOB and NegRisk, and additionally `venue.adapter` for NegRisk markets.
+</Warning>
+
+## GTC Orders
+
+GTC orders remain on the book until filled or explicitly cancelled.
+
+```rust
+use limitless_exchange_rust_sdk::{CreateOrderParams, GtcOrderArgs, OrderType, Side};
+
+let market = client.markets.get_market("btc-above-100k-march-2025").await?;
+let tokens = market.tokens.as_ref().expect("market tokens");
+
+let result = order_client
+    .create_order(CreateOrderParams {
+        order_type: OrderType::Gtc,
+        market_slug: market.slug.clone(),
+        args: GtcOrderArgs {
+            token_id: tokens.yes.clone(),
+            side: Side::Buy,
+            price: 0.65,
+            size: 10.0,
+            expiration: None,
+            nonce: None,
+            taker: None,
+            post_only: false,
+        }
+        .into(),
+    })
+    .await?;
+
+println!("order id {}", result.order.id);
+```
+
+### Post-only GTC order
+
+Use `post_only: true` to ensure the order never crosses the spread as a taker:
+
+```rust
+let result = order_client
+    .create_order(CreateOrderParams {
+        order_type: OrderType::Gtc,
+        market_slug: market.slug.clone(),
+        args: GtcOrderArgs {
+            token_id: tokens.yes.clone(),
+            side: Side::Buy,
+            price: 0.65,
+            size: 10.0,
+            expiration: None,
+            nonce: None,
+            taker: None,
+            post_only: true,
+        }
+        .into(),
+    })
+    .await?;
+```
+
+### `GtcOrderArgs`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `token_id` | `String` | Token ID from market data |
+| `side` | `Side` | `Side::Buy` or `Side::Sell` |
+| `price` | `f64` | Price between 0 and 1, tick-aligned to `0.001` |
+| `size` | `f64` | Number of shares |
+| `post_only` | `bool` | Optional. Rejects the order if it would immediately match |
+| `expiration` | `Option<String>` | Optional expiration timestamp. Defaults to `"0"` |
+| `nonce` | `Option<i32>` | Optional nonce |
+| `taker` | `Option<String>` | Optional taker address |
+
+## FAK Orders
+
+FAK orders use the same `price` + `size` inputs as GTC, but any unmatched remainder is cancelled immediately.
+
+```rust
+use limitless_exchange_rust_sdk::{CreateOrderParams, FakOrderArgs, OrderType, Side};
+
+let response = order_client
+    .create_order(CreateOrderParams {
+        order_type: OrderType::Fak,
+        market_slug: market.slug.clone(),
+        args: FakOrderArgs {
+            token_id: tokens.yes.clone(),
+            side: Side::Buy,
+            price: 0.45,
+            size: 10.0,
+            expiration: None,
+            nonce: None,
+            taker: None,
+        }
+        .into(),
+    })
+    .await?;
+
+println!("order id {}", response.order.id);
+println!("maker matches {}", response.maker_matches.len());
+```
+
+<Note>
+  `post_only` is not supported for `FAK` orders.
+</Note>
+
+## FOK Orders
+
+FOK orders execute immediately and fully, or are cancelled entirely. Instead of `price` and `size`, you pass `maker_amount`.
+
+<Tabs>
+  <Tab title="FOK BUY">
+    For buys, `maker_amount` is the total USDC to spend:
+
+    ```rust
+    use limitless_exchange_rust_sdk::{CreateOrderParams, FokOrderArgs, OrderType, Side};
+
+    let response = order_client
+        .create_order(CreateOrderParams {
+            order_type: OrderType::Fok,
+            market_slug: market.slug.clone(),
+            args: FokOrderArgs {
+                token_id: tokens.yes.clone(),
+                side: Side::Buy,
+                maker_amount: 10.0,
+                expiration: None,
+                nonce: None,
+                taker: None,
+            }
+            .into(),
+        })
+        .await?;
+
+    println!("order id {}", response.order.id);
+    ```
+  </Tab>
+  <Tab title="FOK SELL">
+    For sells, `maker_amount` is the number of shares to sell:
+
+    ```rust
+    let response = order_client
+        .create_order(CreateOrderParams {
+            order_type: OrderType::Fok,
+            market_slug: market.slug.clone(),
+            args: FokOrderArgs {
+                token_id: tokens.yes.clone(),
+                side: Side::Sell,
+                maker_amount: 10.0,
+                expiration: None,
+                nonce: None,
+                taker: None,
+            }
+            .into(),
+        })
+        .await?;
+    ```
+  </Tab>
+</Tabs>
+
+### `FokOrderArgs`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `token_id` | `String` | Token ID from market data |
+| `side` | `Side` | `Side::Buy` or `Side::Sell` |
+| `maker_amount` | `f64` | BUY: USDC to spend. SELL: shares to sell. Max 6 decimals |
+| `expiration` | `Option<String>` | Optional expiration timestamp |
+| `nonce` | `Option<i32>` | Optional nonce |
+| `taker` | `Option<String>` | Optional taker address |
+
+## Build and Sign Separately
+
+For advanced flows, build and sign orders without submitting them:
+
+```rust
+use limitless_exchange_rust_sdk::{GtcOrderArgs, Side};
+
+let unsigned = order_client
+    .build_unsigned_order(
+        GtcOrderArgs {
+            token_id: tokens.yes.clone(),
+            side: Side::Buy,
+            price: 0.65,
+            size: 10.0,
+            expiration: None,
+            nonce: None,
+            taker: None,
+            post_only: false,
+        }
+        .into(),
+    )
+    .await?;
+
+let signature = order_client.sign_order_for_market(&market.slug, &unsigned).await?;
+println!("{}", signature);
+```
+
+You can also override the signing config explicitly:
+
+```rust
+use limitless_exchange_rust_sdk::OrderSigningConfig;
+
+let signature = order_client.sign_order_with_config(
+    &unsigned,
+    OrderSigningConfig {
+        chain_id: 8453,
+        contract_address: "0xYourExchangeContract".to_string(),
+    },
+)?;
+```
+
+## Cancelling Orders
+
+Cancel a single order:
+
+```rust
+let message = order_client.cancel("abc123-def456").await?;
+println!("{}", message);
+```
+
+Cancel all orders in a market:
+
+```rust
+let message = order_client.cancel_all(&market.slug).await?;
+println!("{}", message);
+```

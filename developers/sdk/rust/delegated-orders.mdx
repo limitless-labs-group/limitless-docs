@@ -1,0 +1,200 @@
+---
+title: "Delegated Orders"
+description: "Place orders on behalf of sub-accounts with the Rust SDK"
+---
+
+The `DelegatedOrderService` enables partners with the `delegated_signing` scope to place and cancel orders on behalf of sub-accounts. The server signs orders using the sub-account's managed wallet, so the partner does not handle private keys directly.
+
+<Warning>
+  Delegated signing requires a sub-account created with `create_server_wallet: Some(true)`. EOA sub-accounts sign their own orders.
+</Warning>
+
+<Info>
+  **Recommended setup:** Store your HMAC credentials (`token_id` / `secret`) on your backend. Use this SDK server-side to sign partner-authenticated requests. Expose only your own app-specific endpoints to the frontend. Never expose HMAC secrets in browser bundles or client-side storage.
+</Info>
+
+## Access
+
+```rust
+use limitless_exchange_rust_sdk::{Client, HmacCredentials};
+
+let http = Client::builder()
+    .hmac_credentials(HmacCredentials {
+        token_id: token_id.to_string(),
+        secret: secret.to_string(),
+    })
+    .build()?;
+
+let client = Client::from_http_client(http)?;
+
+// Use client.delegated_orders.*
+```
+
+## Create a GTC delegated order
+
+```rust
+use limitless_exchange_rust_sdk::{
+    CreateDelegatedOrderParams, GtcOrderArgs, OrderType, Side,
+};
+
+let on_behalf_of = 12345;
+let token_id = "123456789".to_string();
+
+let response = client
+    .delegated_orders
+    .create_order(CreateDelegatedOrderParams {
+        market_slug: "btc-100k".to_string(),
+        order_type: OrderType::Gtc,
+        on_behalf_of,
+        fee_rate_bps: 300,
+        args: GtcOrderArgs {
+            token_id: token_id.clone(),
+            side: Side::Buy,
+            price: 0.55,
+            size: 10.0,
+            expiration: None,
+            nonce: None,
+            taker: None,
+            post_only: false,
+        }
+        .into(),
+    })
+    .await?;
+
+println!("{}", response.order.id);
+```
+
+Use `post_only: true` when the order must rest on the book:
+
+```rust
+let response = client
+    .delegated_orders
+    .create_order(CreateDelegatedOrderParams {
+        market_slug: "btc-100k".to_string(),
+        order_type: OrderType::Gtc,
+        on_behalf_of,
+        fee_rate_bps: 300,
+        args: GtcOrderArgs {
+            token_id: token_id.clone(),
+            side: Side::Buy,
+            price: 0.55,
+            size: 10.0,
+            expiration: None,
+            nonce: None,
+            taker: None,
+            post_only: true,
+        }
+        .into(),
+    })
+    .await?;
+```
+
+## Create a FAK delegated order
+
+FAK orders use `price` and `size`, then cancel any unmatched remainder:
+
+```rust
+use limitless_exchange_rust_sdk::{CreateDelegatedOrderParams, FakOrderArgs, OrderType, Side};
+
+let response = client
+    .delegated_orders
+    .create_order(CreateDelegatedOrderParams {
+        market_slug: "btc-100k".to_string(),
+        order_type: OrderType::Fak,
+        on_behalf_of,
+        fee_rate_bps: 300,
+        args: FakOrderArgs {
+            token_id: token_id.clone(),
+            side: Side::Buy,
+            price: 0.45,
+            size: 10.0,
+            expiration: None,
+            nonce: None,
+            taker: None,
+        }
+        .into(),
+    })
+    .await?;
+
+println!("maker matches {}", response.maker_matches.len());
+```
+
+## Create a FOK delegated order
+
+FOK orders execute immediately or cancel entirely. They use `maker_amount`:
+
+```rust
+use limitless_exchange_rust_sdk::{CreateDelegatedOrderParams, FokOrderArgs, OrderType, Side};
+
+let response = client
+    .delegated_orders
+    .create_order(CreateDelegatedOrderParams {
+        market_slug: "btc-100k".to_string(),
+        order_type: OrderType::Fok,
+        on_behalf_of,
+        fee_rate_bps: 300,
+        args: FokOrderArgs {
+            token_id: token_id.clone(),
+            side: Side::Buy,
+            maker_amount: 1.0,
+            expiration: None,
+            nonce: None,
+            taker: None,
+        }
+        .into(),
+    })
+    .await?;
+
+println!("{}", response.order.id);
+```
+
+## Parameters
+
+### `CreateDelegatedOrderParams`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `market_slug` | `String` | Market identifier |
+| `order_type` | `OrderType` | `OrderType::Gtc`, `OrderType::Fak`, or `OrderType::Fok` |
+| `on_behalf_of` | `i32` | Profile ID of the sub-account |
+| `fee_rate_bps` | `i32` | Fee rate in basis points. Use `300` or `0` for the default |
+| `args` | `OrderArgs` | `GtcOrderArgs`, `FakOrderArgs`, or `FokOrderArgs` converted with `.into()` |
+
+## Cancel an order
+
+```rust
+let message = client.delegated_orders.cancel(order_id).await?;
+println!("{}", message);
+```
+
+Cancel on behalf of a sub-account:
+
+```rust
+let message = client
+    .delegated_orders
+    .cancel_on_behalf_of(order_id, on_behalf_of)
+    .await?;
+```
+
+## Cancel all orders in a market
+
+```rust
+let message = client.delegated_orders.cancel_all("btc-100k").await?;
+println!("{}", message);
+```
+
+Cancel all on behalf of a sub-account:
+
+```rust
+let message = client
+    .delegated_orders
+    .cancel_all_on_behalf_of("btc-100k", on_behalf_of)
+    .await?;
+```
+
+## How it works
+
+1. The SDK builds an unsigned order locally with a zero verifying address.
+2. It sends `owner_id` and `on_behalf_of` as the sub-account profile ID.
+3. The backend detects delegated-signing scope and signs the order with the managed wallet.
+4. The signed order is submitted to the exchange engine.

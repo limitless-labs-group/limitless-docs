@@ -1,0 +1,121 @@
+---
+title: "API Tokens"
+description: "Manage scoped API tokens with the Rust SDK"
+---
+
+The `ApiTokenService` handles the partner self-service token lifecycle: capability checks, token derivation, listing active tokens, and revocation.
+
+<Note>
+  Token derivation and capability queries require a **Privy identity token**. The SDK does not obtain this token for you — your application must authenticate the partner via Privy and pass the resulting token.
+</Note>
+
+## Access
+
+The service is available on the root `Client`:
+
+```rust
+use limitless_exchange_rust_sdk::Client;
+
+let client = Client::new()?;
+
+// Use client.api_tokens.*
+```
+
+## Get partner capabilities
+
+Check whether token management is enabled and which scopes are allowed:
+
+```rust
+let capabilities = client
+    .api_tokens
+    .get_capabilities(identity_token)
+    .await?;
+
+println!("{}", capabilities.token_management_enabled);
+println!("{:?}", capabilities.allowed_scopes);
+```
+
+## Derive a token
+
+Create a new scoped API token. The `secret` is returned once — store it securely.
+
+```rust
+use limitless_exchange_rust_sdk::{
+    DeriveApiTokenInput, SCOPE_ACCOUNT_CREATION, SCOPE_DELEGATED_SIGNING, SCOPE_TRADING,
+};
+
+let derived = client
+    .api_tokens
+    .derive_token(
+        identity_token,
+        &DeriveApiTokenInput {
+            label: Some("production-bot".to_string()),
+            scopes: vec![
+                SCOPE_TRADING.to_string(),
+                SCOPE_ACCOUNT_CREATION.to_string(),
+                SCOPE_DELEGATED_SIGNING.to_string(),
+            ],
+        },
+    )
+    .await?;
+
+println!("{}", derived.token_id);
+println!("{:?}", derived.scopes);
+```
+
+### Create an HMAC-authenticated client
+
+After deriving a token, create a new client with those HMAC credentials:
+
+```rust
+use limitless_exchange_rust_sdk::{Client, HmacCredentials};
+
+let http = Client::builder()
+    .hmac_credentials(HmacCredentials {
+        token_id: derived.token_id.clone(),
+        secret: derived.secret.clone(),
+    })
+    .build()?;
+
+let scoped_client = Client::from_http_client(http)?;
+```
+
+If `scopes` is omitted when deriving the token, the backend defaults it to `["trading"]`.
+
+## List active tokens
+
+Returns all non-revoked tokens for the authenticated partner:
+
+```rust
+let tokens = scoped_client.api_tokens.list_tokens().await?;
+
+for token in tokens {
+    println!(
+        "{} {:?} {:?} {:?}",
+        token.token_id,
+        token.label,
+        token.scopes,
+        token.last_used_at
+    );
+}
+```
+
+## Revoke a token
+
+Immediately invalidate a token:
+
+```rust
+let message = scoped_client.api_tokens.revoke_token(&derived.token_id).await?;
+println!("{}", message);
+```
+
+## Scope constants
+
+The Rust SDK exports typed string constants:
+
+| Constant | Value |
+|----------|-------|
+| `SCOPE_TRADING` | `"trading"` |
+| `SCOPE_ACCOUNT_CREATION` | `"account_creation"` |
+| `SCOPE_DELEGATED_SIGNING` | `"delegated_signing"` |
+| `SCOPE_WITHDRAWAL` | `"withdrawal"` |
