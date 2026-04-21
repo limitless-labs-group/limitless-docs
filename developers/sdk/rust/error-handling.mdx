@@ -1,0 +1,172 @@
+---
+title: "Error Handling"
+description: "Retry logic and error handling with the Rust SDK"
+---
+
+## Overview
+
+The Rust SDK provides:
+
+- structured `LimitlessError` variants
+- HTTP `ApiError` details with status, method, URL, and response payload
+- reusable retry helpers via `with_retry` and `RetryableClient`
+- optional logging hooks for retry visibility
+
+## Error Types
+
+All SDK methods return:
+
+```rust
+type Result<T> = std::result::Result<T, LimitlessError>;
+```
+
+### `LimitlessError`
+
+| Variant | Description |
+|---------|-------------|
+| `LimitlessError::Api(ApiError)` | Non-2xx HTTP response |
+| `LimitlessError::AuthenticationRequired { operation }` | Missing API key or HMAC credentials |
+| `LimitlessError::InvalidInput(String)` | Local validation failure before a request is sent |
+| `LimitlessError::Request(reqwest::Error)` | Transport error such as timeout or connection failure |
+| `LimitlessError::Decode(serde_json::Error)` | Failed to decode response JSON |
+| `LimitlessError::Base64(base64::DecodeError)` | Invalid HMAC secret encoding |
+| `LimitlessError::Signing(String)` | EIP-712 or HMAC signing issue |
+| `LimitlessError::WebSocket(String)` | WebSocket error |
+
+### Inspecting API errors
+
+```rust
+use limitless_exchange_rust_sdk::{Client, LimitlessError};
+
+match client.portfolio.get_positions().await {
+    Err(LimitlessError::Api(api)) => {
+        eprintln!("status {}", api.status);
+        eprintln!("message {}", api.message);
+        eprintln!("method {}", api.method);
+        eprintln!("url {}", api.url);
+        eprintln!("payload {}", api.data);
+
+        if api.is_auth_error() {
+            eprintln!("credentials are invalid or missing required scope");
+        }
+    }
+    Err(err) => eprintln!("other error: {}", err),
+    Ok(_) => {}
+}
+```
+
+### Authentication-required errors
+
+The SDK fails early for authenticated methods when no credentials are configured:
+
+```rust
+match client.portfolio.get_positions().await {
+    Err(LimitlessError::AuthenticationRequired { operation }) => {
+        eprintln!("missing auth for {}", operation);
+    }
+    _ => {}
+}
+```
+
+## `with_retry`
+
+Use `with_retry()` to wrap any async operation:
+
+```rust
+use std::time::Duration;
+
+use limitless_exchange_rust_sdk::{with_retry, RetryConfig};
+
+let markets = client.markets.clone();
+
+let value = with_retry(
+    RetryConfig {
+        max_retries: 5,
+        exponential_base: 2.0,
+        max_delay: Duration::from_secs(30),
+        ..Default::default()
+    },
+    None,
+    || {
+        let markets = markets.clone();
+        async move { markets.get_market("btc-above-100k-march-2025").await }
+    },
+)
+.await?;
+```
+
+By default, retries are enabled for:
+
+- `429`
+- `500`
+- `502`
+- `503`
+- `504`
+- connection failures
+- timeouts
+
+## `RetryableClient`
+
+Use `RetryableClient` when you want a retrying HTTP transport wrapper:
+
+```rust
+use std::sync::Arc;
+
+use limitless_exchange_rust_sdk::{
+    Client, ConsoleLogger, LogLevel, RetryConfig, RetryableClient,
+};
+
+let http = Client::builder()
+    .api_key(std::env::var("LIMITLESS_API_KEY")?)
+    .build()?;
+
+let retryable = RetryableClient::new(
+    http.clone(),
+    RetryConfig::default(),
+    Some(Arc::new(ConsoleLogger::new(LogLevel::Info))),
+);
+
+let raw_profile: serde_json::Value = retryable.get("/portfolio/positions").await?;
+println!("{}", raw_profile);
+```
+
+You can still build the root `Client` from the same `HttpClient`:
+
+```rust
+let client = Client::from_http_client(http)?;
+```
+
+## Retry callbacks
+
+Attach a callback to observe retry attempts:
+
+```rust
+use std::time::Duration;
+
+use limitless_exchange_rust_sdk::RetryConfig;
+
+let config = RetryConfig::default().with_on_retry(|attempt, err, delay| {
+    eprintln!(
+        "retry attempt={} delay_ms={} error={}",
+        attempt,
+        delay.as_millis(),
+        err
+    );
+});
+```
+
+## Logging
+
+Retry helpers accept an optional `SharedLogger`. Use `ConsoleLogger` during integration work:
+
+```rust
+use std::sync::Arc;
+
+use limitless_exchange_rust_sdk::{ConsoleLogger, LogLevel};
+
+let logger = Arc::new(ConsoleLogger::new(LogLevel::Debug));
+```
+
+<Tip>
+  For trading systems, treat `InvalidInput` and `AuthenticationRequired` as non-retryable. Retries are most useful for transient HTTP failures, rate limits, and network timeouts.
+</Tip>

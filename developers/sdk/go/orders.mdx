@@ -5,7 +5,7 @@ description: "Create and manage orders with the Go SDK"
 
 ## Overview
 
-The `OrderClient` handles order creation, EIP-712 signing, and order management. It supports both Good-Till-Cancelled (GTC) limit orders and Fill-or-Kill (FOK) market orders.
+The `OrderClient` handles order creation, EIP-712 signing, and order management. It supports Good-Till-Cancelled (GTC), Fill-And-Kill (FAK), and Fill-or-Kill (FOK) orders.
 
 ## Prerequisites
 
@@ -135,6 +135,46 @@ result, err := orderClient.CreateOrder(ctx, limitless.CreateOrderParams{
 | `Nonce` | `*int` | Optional nonce for replay protection (auto-generated if `nil`) |
 | `Taker` | `string` | Optional taker address (defaults to zero address) |
 
+## FAK Orders (Fill-And-Kill)
+
+FAK orders use the same `Price` and `Size` inputs as GTC, but they only consume immediately available liquidity and cancel any unmatched remainder.
+
+`PostOnly` is not supported for FAK orders.
+
+```go
+result, err := orderClient.CreateOrder(ctx, limitless.CreateOrderParams{
+    OrderType:  limitless.OrderTypeFAK,
+    MarketSlug: "btc-above-100k-march-2025",
+    Args: limitless.FAKOrderArgs{
+        TokenID: market.Tokens.Yes,
+        Side:    limitless.SideBuy,
+        Price:   0.45,
+        Size:    10.0,
+    },
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+if len(result.MakerMatches) > 0 {
+    fmt.Printf("FAK order matched immediately with %d fill(s)\n", len(result.MakerMatches))
+} else {
+    fmt.Println("FAK remainder was cancelled.")
+}
+```
+
+### FAKOrderArgs
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `TokenID` | `string` | Token ID from `Market.Tokens.Yes` or `Market.Tokens.No` |
+| `Side` | `Side` | `SideBuy` (0) or `SideSell` (1) |
+| `Price` | `float64` | Price per share (0.0–1.0, must be tick-aligned to 0.001) |
+| `Size` | `float64` | Number of shares to buy or sell |
+| `Expiration` | `string` | Optional expiration timestamp (default `"0"` = no expiration) |
+| `Nonce` | `*int` | Optional nonce for replay protection (auto-generated if `nil`) |
+| `Taker` | `string` | Optional taker address (defaults to zero address) |
+
 ## FOK Orders (Fill-or-Kill)
 
 FOK orders execute immediately and fully, or are rejected entirely. Instead of `Price` and `Size`, you specify `MakerAmount`:
@@ -248,6 +288,7 @@ fmt.Println("Signature:", signature)
 | Constant | Value | Description |
 |----------|-------|-------------|
 | `OrderTypeGTC` | `"GTC"` | Good-Till-Cancelled limit order (rests on the book) |
+| `OrderTypeFAK` | `"FAK"` | Fill-And-Kill limit order (cancels any unmatched remainder) |
 | `OrderTypeFOK` | `"FOK"` | Fill-or-Kill market order (fills immediately or rejects) |
 
 ## Error Handling
@@ -326,6 +367,22 @@ func main() {
         log.Fatal(err)
     }
     fmt.Printf("GTC order placed: %+v\n", result.Order)
+
+    // Place a FAK BUY order for 10 YES shares at $0.45
+    fakResult, err := orderClient.CreateOrder(ctx, limitless.CreateOrderParams{
+        OrderType:  limitless.OrderTypeFAK,
+        MarketSlug: "btc-above-100k-march-2025",
+        Args: limitless.FAKOrderArgs{
+            TokenID: market.Tokens.Yes,
+            Side:    limitless.SideBuy,
+            Price:   0.45,
+            Size:    10.0,
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("FAK order placed: %+v\n", fakResult.Order)
 
     // Place a FOK BUY order spending 5 USDC
     fokResult, err := orderClient.CreateOrder(ctx, limitless.CreateOrderParams{

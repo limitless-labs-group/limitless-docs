@@ -1,0 +1,154 @@
+---
+title: "Portfolio & Positions"
+description: "Track positions and history with the Rust SDK"
+---
+
+## Overview
+
+The `PortfolioFetcher` retrieves your profile, open positions, and trading history. It requires an authenticated client.
+
+## Setup
+
+```rust
+use limitless_exchange_rust_sdk::Client;
+
+let client = Client::new()?;
+
+// Access through the root client
+let portfolio = client.portfolio.clone();
+```
+
+<Note>
+  `PortfolioFetcher` requires authentication. Configure `LIMITLESS_API_KEY` or HMAC credentials before calling these endpoints.
+</Note>
+
+## Fetching Your Profile
+
+Use `get_profile()` to retrieve a profile by wallet address:
+
+```rust
+let profile = client
+    .portfolio
+    .get_profile("0xYOUR_WALLET_ADDRESS")
+    .await?;
+
+println!("id {}", profile.id);
+println!("account {}", profile.account);
+
+if let Some(display_name) = profile.display_name.as_deref() {
+    println!("display name {}", display_name);
+}
+
+if let Some(rank) = profile.rank.as_ref() {
+    println!("rank {} fee {}", rank.name, rank.fee_rate_bps);
+}
+```
+
+## Fetching All Positions
+
+Use `get_positions()` to retrieve your portfolio:
+
+```rust
+let positions = client.portfolio.get_positions().await?;
+
+println!("CLOB positions: {}", positions.clob.len());
+println!("AMM positions: {}", positions.amm.len());
+```
+
+## CLOB Positions
+
+Use `get_clob_positions()` for CLOB-only positions:
+
+```rust
+let positions = client.portfolio.get_clob_positions().await?;
+
+for pos in positions {
+    println!("{} {}", pos.market.title, pos.tokens_balance.yes);
+}
+```
+
+## AMM Positions
+
+Use `get_amm_positions()` for AMM-only positions:
+
+```rust
+let positions = client.portfolio.get_amm_positions().await?;
+
+for pos in positions {
+    println!(
+        "{} outcome={} unrealized={}",
+        pos.market.title,
+        pos.outcome_index,
+        pos.unrealized_pnl
+    );
+}
+```
+
+## User History
+
+The Rust SDK uses the current cursor-based history API:
+
+- pass `None` for the first request
+- the SDK sends `cursor=` with an empty value on that first call
+- subsequent requests use the returned `next_cursor`
+- `limit` defaults to `20` when omitted
+
+```rust
+let history = client.portfolio.get_user_history(None, Some(20)).await?;
+
+for entry in &history.data {
+    println!(
+        "block={} tx={:?} strategy={:?}",
+        entry.block_timestamp,
+        entry.transaction_hash,
+        entry.strategy
+    );
+}
+
+if let Some(next_cursor) = history.next_cursor.as_deref() {
+    let next_page = client
+        .portfolio
+        .get_user_history(Some(next_cursor), Some(20))
+        .await?;
+
+    println!("next page entries {}", next_page.data.len());
+}
+```
+
+### `HistoryResponse`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `data` | `Vec<HistoryEntry>` | History records |
+| `next_cursor` | `Option<String>` | Cursor token for the next page |
+
+### `HistoryEntry`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `block_timestamp` | `i64` | Block timestamp |
+| `collateral_amount` | `Option<String>` | Collateral amount when present |
+| `market` | `Option<HistoryMarket>` | Market metadata |
+| `outcome_index` | `Option<i32>` | Outcome index |
+| `outcome_token_amount` | `Option<String>` | Single token amount |
+| `outcome_token_amounts` | `Option<Vec<String>>` | Multi-outcome token amounts |
+| `outcome_token_price` | `Option<Value>` | Price payload from the API |
+| `strategy` | `Option<String>` | Strategy label |
+| `transaction_hash` | `Option<String>` | Related transaction hash |
+
+<Info>
+  The first cursor request is not `page=1`. The Rust SDK intentionally opts into the new backend flow by sending `cursor=` empty on the first request.
+</Info>
+
+## Authentication Errors
+
+If the client is missing credentials, portfolio methods return `LimitlessError::AuthenticationRequired` before making the HTTP request:
+
+```rust
+match client.portfolio.get_positions().await {
+    Err(limitless_exchange_rust_sdk::LimitlessError::AuthenticationRequired { operation }) => {
+        eprintln!("auth required for {}", operation);
+    }
+    other => println!("{:?}", other),
+}
+```

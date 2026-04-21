@@ -145,6 +145,55 @@ const result = await orderClient.createOrder({
 | `orderType` | `OrderType` | `OrderType.GTC` |
 | `postOnly` | `boolean` | Optional. When `true`, rejects the order if it would immediately match. Default `false`. |
 
+## FAK Orders (Fill-And-Kill)
+
+FAK orders use the same `price` and `size` inputs as GTC, but they only consume immediately available liquidity and cancel any unmatched remainder.
+
+`postOnly` is not supported for FAK orders.
+
+### Buy with FAK
+
+```typescript
+const result = await orderClient.createOrder({
+  marketSlug: market.slug,
+  tokenId: market.positionIds[0], // YES token
+  side: Side.BUY,
+  price: 0.45,
+  size: 100,
+  orderType: OrderType.FAK,
+});
+
+if (result.makerMatches.length > 0) {
+  console.log(`FAK order matched immediately with ${result.makerMatches.length} fill(s)`);
+} else {
+  console.log('FAK remainder was cancelled.');
+}
+```
+
+### Sell with FAK
+
+```typescript
+const result = await orderClient.createOrder({
+  marketSlug: market.slug,
+  tokenId: market.positionIds[1], // NO token
+  side: Side.SELL,
+  price: 0.40,
+  size: 50,
+  orderType: OrderType.FAK,
+});
+```
+
+### FAK Parameter Reference
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `marketSlug` | `string` | Market slug identifier |
+| `tokenId` | `string` | YES or NO token ID from `market.positionIds` |
+| `side` | `Side` | `Side.BUY` (0) or `Side.SELL` (1) |
+| `price` | `number` | Price between 0 and 1 (exclusive), tick-aligned |
+| `size` | `number` | Number of shares (positive, step-aligned) |
+| `orderType` | `OrderType` | `OrderType.FAK` |
+
 ## FOK Orders (Fill-Or-Kill)
 
 FOK orders execute immediately against the existing orderbook or are rejected entirely. Instead of `price` and `size`, specify `makerAmount` which represents the total value to trade.

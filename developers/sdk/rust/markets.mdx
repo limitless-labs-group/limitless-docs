@@ -1,0 +1,194 @@
+---
+title: "Markets"
+description: "Market discovery and orderbook data with the Rust SDK"
+---
+
+## Overview
+
+The `MarketFetcher` handles market discovery, individual market lookups, user-order lookup, and orderbook retrieval. It also caches venue contract addresses used by the order-signing flow.
+
+## Setup
+
+```rust
+use limitless_exchange_rust_sdk::Client;
+
+let client = Client::new()?;
+
+// Access through the root client
+let markets = client.markets.clone();
+```
+
+## Fetching Active Markets
+
+Use `get_active_markets()` to retrieve a paginated list of active markets:
+
+```rust
+use limitless_exchange_rust_sdk::{ActiveMarketsParams, ActiveMarketsSortBy, Client};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = Client::new()?;
+
+    let result = client
+        .markets
+        .get_active_markets(Some(&ActiveMarketsParams {
+            page: Some(1),
+            limit: Some(10),
+            sort_by: Some(ActiveMarketsSortBy::Liquidity),
+        }))
+        .await?;
+
+    for market in result.data {
+        println!("{} {}", market.title, market.slug);
+    }
+
+    Ok(())
+}
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `page` | `Option<u32>` | `None` | Page number for pagination |
+| `limit` | `Option<u32>` | `None` | Number of markets per page |
+| `sort_by` | `Option<ActiveMarketsSortBy>` | `None` | Sort order |
+
+### Sort options
+
+| Variant | Description |
+|---------|-------------|
+| `ActiveMarketsSortBy::LpRewards` | Sort by LP rewards |
+| `ActiveMarketsSortBy::EndingSoon` | Sort by markets ending soonest |
+| `ActiveMarketsSortBy::Newest` | Sort by newest markets |
+| `ActiveMarketsSortBy::HighValue` | Sort by highest value |
+| `ActiveMarketsSortBy::Liquidity` | Sort by liquidity |
+
+## Fetching a Single Market
+
+Use `get_market()` to retrieve full details for a specific market:
+
+```rust
+let market = client
+    .markets
+    .get_market("btc-above-100k-march-2025")
+    .await?;
+
+println!("{}", market.title);
+
+if let Some(tokens) = market.tokens.as_ref() {
+    println!("YES token: {}", tokens.yes);
+    println!("NO token: {}", tokens.no);
+}
+
+if let Some(venue) = market.venue.as_ref() {
+    println!("Exchange: {}", venue.exchange);
+}
+```
+
+<Note>
+  `market.tokens` and `market.venue` are optional in the Rust models, so unwrap them only after checking they are present.
+</Note>
+
+## Fetching the Orderbook
+
+Use `get_order_book()` to retrieve bids and asks for a market:
+
+```rust
+let orderbook = client
+    .markets
+    .get_order_book("btc-above-100k-march-2025")
+    .await?;
+
+for bid in &orderbook.bids {
+    println!("bid {} {}", bid.price, bid.size);
+}
+
+for ask in &orderbook.asks {
+    println!("ask {} {}", ask.price, ask.size);
+}
+
+println!("midpoint {}", orderbook.adjusted_midpoint);
+```
+
+## Fetching User Orders
+
+Use `get_user_orders()` to retrieve your orders on a market. This requires authentication:
+
+```rust
+let orders = client
+    .markets
+    .get_user_orders("btc-above-100k-march-2025")
+    .await?;
+
+for order in orders {
+    println!("{} {:?} {:?}", order.id, order.price, order.filled_size);
+}
+```
+
+You can also call it from a fetched `Market` instance:
+
+```rust
+let market = client.markets.get_market("btc-above-100k-march-2025").await?;
+let orders = market.get_user_orders().await?;
+```
+
+## Venue Caching
+
+Every call to `get_market()` caches the market venue (exchange and adapter addresses). The `OrderClient` reads from this cache when resolving the correct EIP-712 verifying contract.
+
+<Steps>
+
+<Step title="Fetch the market">
+  Calling `get_market()` retrieves and caches the venue:
+
+  ```rust
+  let market = client.markets.get_market("btc-above-100k-march-2025").await?;
+  ```
+</Step>
+
+<Step title="Check the cache">
+  Access the cached venue directly:
+
+  ```rust
+  if let Some(venue) = client.markets.get_venue("btc-above-100k-march-2025") {
+      println!("exchange {}", venue.exchange);
+  }
+  ```
+</Step>
+
+<Step title="Place an order">
+  The `OrderClient` will use the cached venue for signing:
+
+  ```rust
+  let private_key = std::env::var("PRIVATE_KEY")?;
+  let order_client = client.new_order_client(&private_key, None)?;
+
+  let market = client.markets.get_market("btc-above-100k-march-2025").await?;
+  let tokens = market.tokens.as_ref().expect("market tokens");
+
+  let response = order_client
+      .create_order(limitless_exchange_rust_sdk::CreateOrderParams {
+          order_type: limitless_exchange_rust_sdk::OrderType::Gtc,
+          market_slug: market.slug.clone(),
+          args: limitless_exchange_rust_sdk::GtcOrderArgs {
+              token_id: tokens.yes.clone(),
+              side: limitless_exchange_rust_sdk::Side::Buy,
+              price: 0.65,
+              size: 10.0,
+              expiration: None,
+              nonce: None,
+              taker: None,
+              post_only: false,
+          }
+          .into(),
+      })
+      .await?;
+
+  println!("{}", response.order.id);
+  ```
+</Step>
+
+</Steps>
+
+<Warning>
+  Calling `get_market()` before `create_order()` is still the recommended pattern. The Rust SDK will fetch venue data on demand if the cache is empty, but prefetching avoids an extra API roundtrip.
+</Warning>

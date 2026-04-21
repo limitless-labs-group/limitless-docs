@@ -1,0 +1,247 @@
+---
+title: "Rust SDK"
+description: "Official Rust SDK for the Limitless Exchange API"
+---
+
+## Overview
+
+The Limitless Exchange Rust SDK (`limitless-exchange-rust-sdk`) is a typed async client for interacting with both **CLOB** and **NegRisk** prediction markets. It provides:
+
+- Strongly typed request and response models
+- Built-in EIP-712 order building and signing
+- Root `Client` composition for markets, portfolio, navigation, partner flows, and WebSockets
+- Pluggable logging and retry helpers
+- Async WebSocket streaming with auto-reconnect
+
+<Note>
+  The SDK requires **Rust 1.74+** and uses `async` / `await` throughout. The examples below assume a Tokio runtime.
+</Note>
+
+## Installation
+
+```toml
+[dependencies]
+limitless-exchange-rust-sdk = "1.0.7"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+```
+
+## Quick Start
+
+<Steps>
+
+<Step title="Initialize the client">
+
+  ```rust
+  use limitless_exchange_rust_sdk::Client;
+
+  #[tokio::main]
+  async fn main() -> Result<(), Box<dyn std::error::Error>> {
+      let client = Client::new()?;
+      Ok(())
+  }
+  ```
+
+</Step>
+
+<Step title="Fetch active markets">
+
+  ```rust
+  use limitless_exchange_rust_sdk::{ActiveMarketsParams, ActiveMarketsSortBy, Client};
+
+  #[tokio::main]
+  async fn main() -> Result<(), Box<dyn std::error::Error>> {
+      let client = Client::new()?;
+
+      let result = client
+          .markets
+          .get_active_markets(Some(&ActiveMarketsParams {
+              limit: Some(10),
+              page: Some(1),
+              sort_by: Some(ActiveMarketsSortBy::Newest),
+          }))
+          .await?;
+
+      for market in result.data {
+          println!("{} {}", market.title, market.slug);
+      }
+
+      Ok(())
+  }
+  ```
+
+</Step>
+
+<Step title="Check your positions">
+
+  ```rust
+  use limitless_exchange_rust_sdk::Client;
+
+  #[tokio::main]
+  async fn main() -> Result<(), Box<dyn std::error::Error>> {
+      let client = Client::new()?; // reads LIMITLESS_API_KEY from the environment if set
+
+      let positions = client.portfolio.get_positions().await?;
+      println!("CLOB positions: {}", positions.clob.len());
+
+      Ok(())
+  }
+  ```
+
+</Step>
+
+</Steps>
+
+## Authentication
+
+The SDK supports both authentication modes:
+
+- Legacy API key (`X-API-Key`)
+- Scoped token HMAC (`lmts-api-key`, `lmts-timestamp`, `lmts-signature`) for partner/programmatic integrations
+
+<Tabs>
+  <Tab title="Environment variable (recommended)">
+    Set `LIMITLESS_API_KEY` and let `Client::new()` or `HttpClientBuilder` load it automatically:
+
+    ```bash
+    export LIMITLESS_API_KEY="lmts_your_key_here"
+    ```
+
+    ```rust
+    use limitless_exchange_rust_sdk::Client;
+
+    let client = Client::new()?;
+    ```
+  </Tab>
+  <Tab title="HMAC (partner/programmatic)">
+    Use `Client::builder()` with scoped API-token credentials:
+
+    ```rust
+    use limitless_exchange_rust_sdk::{Client, HmacCredentials};
+
+    let http = Client::builder()
+        .hmac_credentials(HmacCredentials {
+            token_id: "your-token-id".to_string(),
+            secret: "your-base64-secret".to_string(),
+        })
+        .build()?;
+
+    let client = Client::from_http_client(http)?;
+    ```
+  </Tab>
+  <Tab title="Explicit API key">
+    Pass the API key directly:
+
+    ```rust
+    use limitless_exchange_rust_sdk::Client;
+
+    let http = Client::builder()
+        .api_key("lmts_your_key_here")
+        .build()?;
+
+    let client = Client::from_http_client(http)?;
+    ```
+  </Tab>
+</Tabs>
+
+<Info>
+  With `hmac_credentials(...)` set, the SDK automatically generates and sends `lmts-api-key`, `lmts-timestamp`, and `lmts-signature`. Do not manually build HMAC headers when using the SDK client.
+</Info>
+
+<Warning>
+  Never hardcode API keys, HMAC secrets, or raw wallet private keys in source code or commit them to version control. Use environment variables or a secrets manager.
+</Warning>
+
+## Root Client
+
+The recommended entrypoint is the root `Client`, which composes all domain services:
+
+```rust
+use limitless_exchange_rust_sdk::Client;
+
+let client = Client::new()?;
+
+// client.markets
+// client.portfolio
+// client.pages
+// client.api_tokens
+// client.partner_accounts
+// client.delegated_orders
+// client.server_wallets
+```
+
+For signing orders, create an `OrderClient` from the root client:
+
+```rust
+let order_client = client.new_order_client(&std::env::var("PRIVATE_KEY")?, None)?;
+```
+
+For streaming, create a `WebSocketClient` from the root client:
+
+```rust
+let ws = client.new_websocket_client(None);
+```
+
+## HttpClient Builder Options
+
+The SDK uses a builder pattern on `Client::builder()`:
+
+| Method | Type | Default | Description |
+|--------|------|---------|-------------|
+| `base_url(url)` | `String` | `https://api.limitless.exchange` | API base URL |
+| `timeout(duration)` | `Duration` | `30s` | HTTP request timeout |
+| `api_key(key)` | `String` | Reads `LIMITLESS_API_KEY` env | Legacy API key authentication |
+| `hmac_credentials(creds)` | `HmacCredentials` | -- | HMAC credentials for scoped API-token auth |
+| `additional_headers(map)` | `HashMap<String, String>` | empty | Extra headers merged into every request |
+| `logger(logger)` | `SharedLogger` | `NoopLogger` | Logger for request/response tracing |
+
+```rust
+use std::{collections::HashMap, sync::Arc, time::Duration};
+
+use limitless_exchange_rust_sdk::{Client, ConsoleLogger, LogLevel};
+
+let mut headers = HashMap::new();
+headers.insert("X-Strategy-Name".to_string(), "market-maker-a".to_string());
+
+let http = Client::builder()
+    .timeout(Duration::from_secs(15))
+    .additional_headers(headers)
+    .logger(Arc::new(ConsoleLogger::new(LogLevel::Debug)))
+    .build()?;
+
+let client = Client::from_http_client(http)?;
+```
+
+## Logging
+
+The SDK provides a pluggable `Logger` trait with a built-in `ConsoleLogger`:
+
+```rust
+use std::sync::Arc;
+
+use limitless_exchange_rust_sdk::{Client, ConsoleLogger, LogLevel};
+
+let http = Client::builder()
+    .logger(Arc::new(ConsoleLogger::new(LogLevel::Debug)))
+    .build()?;
+
+let client = Client::from_http_client(http)?;
+```
+
+| Level | Description |
+|-------|-------------|
+| `LogLevel::Debug` | Verbose request/response output, venue cache behavior, and WebSocket lifecycle |
+| `LogLevel::Info` | General operational messages |
+| `LogLevel::Warn` | Warnings about missing auth, cache misses, or retry behavior |
+| `LogLevel::Error` | Errors only |
+
+<Tip>
+  Use `LogLevel::Debug` during development when integrating signing, partner flows, or WebSockets. Switch to `Info` or `Warn` in production.
+</Tip>
+
+## Source Code
+
+The SDK is open source. Contributions and issue reports are welcome.
+
+<Card title="GitHub Repository" icon="github" href="https://github.com/limitless-labs-group/limitless-exchange-rust-sdk">
+  Browse the source, report issues, and contribute at github.com/limitless-labs-group/limitless-exchange-rust-sdk
+</Card>

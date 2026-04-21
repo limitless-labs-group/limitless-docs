@@ -1,0 +1,85 @@
+---
+title: "Partner Accounts"
+description: "Create and manage sub-accounts with the Rust SDK"
+---
+
+The `PartnerAccountService` creates sub-account profiles linked to the authenticated partner. It requires HMAC authentication with the `account_creation` scope.
+
+## Access
+
+```rust
+use limitless_exchange_rust_sdk::{Client, HmacCredentials};
+
+let http = Client::builder()
+    .hmac_credentials(HmacCredentials {
+        token_id: token_id.to_string(),
+        secret: secret.to_string(),
+    })
+    .build()?;
+
+let client = Client::from_http_client(http)?;
+
+// Use client.partner_accounts.*
+```
+
+## Server wallet mode
+
+Set `create_server_wallet` to create a managed wallet for the sub-account. This enables delegated signing:
+
+```rust
+use limitless_exchange_rust_sdk::CreatePartnerAccountInput;
+
+let account = client
+    .partner_accounts
+    .create_account(
+        &CreatePartnerAccountInput {
+            display_name: Some("user-alice".to_string()),
+            create_server_wallet: Some(true),
+        },
+        None,
+    )
+    .await?;
+
+println!("{}", account.profile_id);
+println!("{}", account.account);
+```
+
+<Note>
+  New server wallets often need a short backend provisioning window before the first delegated trade. A delay of a few seconds is normal.
+</Note>
+
+## EOA mode
+
+For externally-owned accounts, pass ownership-verification headers:
+
+```rust
+use limitless_exchange_rust_sdk::{
+    CreatePartnerAccountEoaHeaders, CreatePartnerAccountInput,
+};
+
+let account = client
+    .partner_accounts
+    .create_account(
+        &CreatePartnerAccountInput {
+            display_name: Some("user-bob".to_string()),
+            create_server_wallet: Some(false),
+        },
+        Some(&CreatePartnerAccountEoaHeaders {
+            account: "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed".to_string(),
+            signing_message: "0x...".to_string(),
+            signature: "0x...".to_string(),
+        }),
+    )
+    .await?;
+```
+
+## Validation
+
+- `display_name` is optional and capped at 44 characters
+- when `create_server_wallet` is not `Some(true)`, EOA headers are required
+- the SDK validates `display_name` length locally before sending the request
+- `409 Conflict` is returned if a profile already exists for the target address
+
+<Warning>
+  Server-wallet sub-accounts and EOA sub-accounts use different signing models. Use server-wallet mode for delegated signing, and EOA mode when the end user will sign orders themselves.
+</Warning>

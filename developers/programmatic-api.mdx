@@ -538,20 +538,23 @@ All day-to-day programmatic API calls use HMAC-SHA256 request signing. See the [
 
 ## SDK support
 
-All three official SDKs provide built-in support for the programmatic API:
+All four official SDKs provide built-in support for the programmatic API:
 
 <Info>
-  As of SDK v1.0.6, all three SDKs include helper methods for server wallet claim (`POST /portfolio/redeem`) and withdrawal (`POST /portfolio/withdraw`).
+  Server-wallet redeem and withdraw helpers are available in the TypeScript, Go, and Rust SDKs. Python integrations should call the REST endpoints directly for those two routes for now.
 </Info>
 
-<CardGroup cols={3}>
+<CardGroup cols={4}>
   <Card title="TypeScript" icon="js" href="/developers/sdk/typescript/api-tokens">
-    `Client` with `hmacCredentials`, `ApiTokenService`, `PartnerAccountService`, `DelegatedOrderService`
+    `Client` with `hmacCredentials`, `apiTokens`, `partnerAccounts`, `delegatedOrders`, `serverWallets`
   </Card>
   <Card title="Python" icon="python" href="/developers/sdk/python/api-tokens">
     `Client` with `hmac_credentials`, `api_tokens`, `partner_accounts`, `delegated_orders`
   </Card>
   <Card title="Go" icon="golang" href="/developers/sdk/go/api-tokens">
-    `Client` with `WithHMACCredentials`, `ApiTokens`, `PartnerAccounts`, `DelegatedOrders`
+    `Client` with `WithHMACCredentials`, `ApiTokens`, `PartnerAccounts`, `DelegatedOrders`, `ServerWallets`
+  </Card>
+  <Card title="Rust" icon="code" href="/developers/sdk/rust/api-tokens">
+    `Client` with `HmacCredentials`, `api_tokens`, `partner_accounts`, `delegated_orders`, `server_wallets`
   </Card>
 </CardGroup>

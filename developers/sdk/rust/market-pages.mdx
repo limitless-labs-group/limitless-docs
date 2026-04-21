@@ -1,0 +1,203 @@
+---
+title: "Market Pages"
+description: "Navigate and filter markets with the Rust SDK"
+---
+
+## Overview
+
+The `MarketPageFetcher` provides access to the Market Navigation API — a hierarchical system for browsing markets by category, applying dynamic filters, and paginating results. All endpoints are public and require no authentication.
+
+## Setup
+
+```rust
+use limitless_exchange_rust_sdk::Client;
+
+let client = Client::new()?;
+
+// Access through the root client
+let pages = client.pages.clone();
+```
+
+## Navigation Tree
+
+Fetch the full navigation hierarchy:
+
+```rust
+let navigation = client.pages.get_navigation().await?;
+
+for node in navigation {
+    println!("{} -> {}", node.name, node.path);
+    for child in node.children {
+        println!("  {} -> {}", child.name, child.path);
+    }
+}
+```
+
+### `NavigationNode`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `String` | Unique identifier |
+| `name` | `String` | Display name |
+| `slug` | `String` | URL-friendly identifier |
+| `path` | `String` | Full URL path (for example `/crypto`) |
+| `icon` | `Option<String>` | Optional icon name |
+| `children` | `Vec<NavigationNode>` | Nested child nodes |
+
+## Resolving a Page by Path
+
+Convert a URL path into a `MarketPage`. The SDK follows up to 3 redirects automatically:
+
+```rust
+let page = client.pages.get_market_page_by_path("/crypto").await?;
+
+println!("page {}", page.name);
+println!("filter groups {}", page.filter_groups.len());
+println!("full path {}", page.full_path);
+```
+
+## Fetching Markets for a Page
+
+Use `get_markets()` with the page ID. The Rust SDK supports both offset and cursor pagination.
+
+### Offset pagination
+
+```rust
+use limitless_exchange_rust_sdk::{MarketPageMarketsParams, MarketPageSort};
+
+let result = client
+    .pages
+    .get_markets(
+        &page.id,
+        Some(&MarketPageMarketsParams {
+            page: Some(1),
+            limit: Some(20),
+            sort: Some(MarketPageSort::CreatedAtDesc),
+            cursor: None,
+            filters: Default::default(),
+        }),
+    )
+    .await?;
+
+for market in result.data {
+    println!("{} {}", market.slug, market.title);
+}
+
+if let Some(pagination) = result.pagination {
+    println!("page {} of {}", pagination.page, pagination.total_pages);
+}
+```
+
+### Cursor pagination
+
+```rust
+use limitless_exchange_rust_sdk::{MarketPageMarketsParams, MarketPageSort};
+
+let first_page = client
+    .pages
+    .get_markets(
+        &page.id,
+        Some(&MarketPageMarketsParams {
+            page: None,
+            limit: Some(20),
+            sort: Some(MarketPageSort::UpdatedAtDesc),
+            cursor: Some(String::new()),
+            filters: Default::default(),
+        }),
+    )
+    .await?;
+
+if let Some(cursor) = first_page.cursor.as_ref().and_then(|c| c.next_cursor.as_deref()) {
+    let next_page = client
+        .pages
+        .get_markets(
+            &page.id,
+            Some(&MarketPageMarketsParams {
+                page: None,
+                limit: Some(20),
+                sort: Some(MarketPageSort::UpdatedAtDesc),
+                cursor: Some(cursor.to_string()),
+                filters: Default::default(),
+            }),
+        )
+        .await?;
+
+    println!("next page size {}", next_page.data.len());
+}
+```
+
+<Warning>
+  `page` and `cursor` are mutually exclusive. The Rust SDK returns a local validation error if you set both in the same request.
+</Warning>
+
+### Filtering
+
+Filters are passed as `HashMap<String, serde_json::Value>`:
+
+```rust
+use std::collections::HashMap;
+
+use serde_json::json;
+
+let mut filters = HashMap::new();
+filters.insert("ticker".to_string(), json!(["btc", "eth"]));
+filters.insert("duration".to_string(), json!("hourly"));
+
+let result = client
+    .pages
+    .get_markets(
+        &page.id,
+        Some(&limitless_exchange_rust_sdk::MarketPageMarketsParams {
+            page: None,
+            limit: Some(10),
+            sort: Some(limitless_exchange_rust_sdk::MarketPageSort::UpdatedAtDesc),
+            cursor: Some(String::new()),
+            filters,
+        }),
+    )
+    .await?;
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | `Option<u32>` | Page number for offset pagination |
+| `limit` | `Option<u32>` | Results per page |
+| `sort` | `Option<MarketPageSort>` | Sort field |
+| `cursor` | `Option<String>` | Cursor token. Use `Some(String::new())` for the first cursor request |
+| `filters` | `HashMap<String, Value>` | Dynamic filters. Values can be strings, numbers, booleans, or arrays |
+
+## Property Keys
+
+Property keys define the available filter dimensions such as `ticker` and `duration`.
+
+```rust
+let keys = client.pages.get_property_keys().await?;
+
+for key in &keys {
+    println!("{} {}", key.name, key.property_type);
+}
+```
+
+### Single key and options
+
+```rust
+let key = client.pages.get_property_key(&keys[0].id).await?;
+println!("{} {}", key.name, key.slug);
+
+let options = client.pages.get_property_options(&key.id, None).await?;
+for option in options {
+    println!("{} {}", option.label, option.value);
+}
+```
+
+You can also filter child options with `parent_id`:
+
+```rust
+let parent_id = "parent-option-id";
+let child_options = client
+    .pages
+    .get_property_options(&key.id, Some(parent_id))
+    .await?;
+```

@@ -1,0 +1,210 @@
+---
+title: "WebSocket"
+description: "Real-time market data and position updates with the Rust SDK"
+---
+
+## Overview
+
+The Rust SDK provides a Socket.IO-based `WebSocketClient` for:
+
+- orderbook and trade streams
+- market and price updates
+- authenticated order, fill, position, and transaction streams
+- automatic reconnect with subscription replay
+
+## Setup
+
+Create a WebSocket client from the root SDK client:
+
+```rust
+use limitless_exchange_rust_sdk::Client;
+
+let client = Client::new()?;
+let ws = client.new_websocket_client(None);
+```
+
+Or configure it directly:
+
+```rust
+use std::sync::Arc;
+
+use limitless_exchange_rust_sdk::{ConsoleLogger, LogLevel, WebSocketClient, WebSocketConfig};
+
+let ws = WebSocketClient::new(Some(WebSocketConfig {
+    logger: Some(Arc::new(ConsoleLogger::new(LogLevel::Info))),
+    ..Default::default()
+}));
+```
+
+## Connect and Disconnect
+
+```rust
+ws.connect().await?;
+println!("{:?}", ws.state());
+println!("{}", ws.is_connected());
+
+ws.disconnect().await?;
+```
+
+### `WebSocketConfig`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `url` | `String` | `wss://ws.limitless.exchange` | WebSocket URL |
+| `api_key` | `Option<String>` | Reads `LIMITLESS_API_KEY` env | API key for authenticated channels |
+| `hmac_credentials` | `Option<HmacCredentials>` | `None` | HMAC credentials for authenticated channels |
+| `auto_reconnect` | `bool` | `true` | Reconnect automatically after disconnects |
+| `reconnect_delay_ms` | `u64` | `1000` | Base reconnect delay |
+| `max_reconnect_attempts` | `u32` | `0` | Max reconnect attempts (`0` means unlimited) |
+| `timeout_ms` | `u64` | `10000` | Connect timeout |
+| `logger` | `Option<SharedLogger>` | `None` | Optional logger |
+
+## Event Handlers
+
+Use `on()` for raw JSON handlers, `once()` for one-shot handlers, and `off()` to unregister:
+
+```rust
+let id = ws.on("orderbookUpdate", |data| {
+    println!("{}", data);
+});
+
+let once_id = ws.once("trade", |data| {
+    println!("first trade {}", data);
+});
+
+ws.off("trade", &[once_id]);
+ws.off("orderbookUpdate", &[id]);
+```
+
+### Typed handlers
+
+The SDK also provides typed event handlers:
+
+```rust
+ws.on_orderbook_update(|update| {
+    println!(
+        "{} bids={} asks={}",
+        update.market_slug,
+        update.orderbook.bids.len(),
+        update.orderbook.asks.len()
+    );
+});
+
+ws.on_trade(|trade| {
+    println!("{} {} {} @ {}", trade.market_slug, trade.side, trade.size, trade.price);
+});
+
+ws.on_order(|order| {
+    println!("{} {}", order.order_id, order.status);
+});
+
+ws.on_fill(|fill| {
+    println!("{} {}", fill.fill_id, fill.order_id);
+});
+
+ws.on_transaction(|tx| {
+    println!("{:?} {}", tx.tx_hash, tx.status);
+});
+
+ws.on_market(|market| {
+    println!("{} {:?}", market.market_slug, market.last_price);
+});
+
+ws.on_market_created(|event| {
+    println!("created {} {}", event.slug, event.title);
+});
+
+ws.on_market_resolved(|event| {
+    println!("resolved {} {}", event.slug, event.winning_outcome);
+});
+```
+
+## Subscribing to Channels
+
+After connecting, subscribe to specific channels:
+
+```rust
+use limitless_exchange_rust_sdk::{SubscriptionChannel, SubscriptionOptions};
+
+ws.connect().await?;
+
+ws.subscribe(
+    SubscriptionChannel::Orderbook,
+    SubscriptionOptions {
+        market_slugs: vec!["btc-above-100k-march-2025".to_string()],
+        ..Default::default()
+    },
+)
+.await?;
+```
+
+### Public channels
+
+| Variant | Description |
+|---------|-------------|
+| `SubscriptionChannel::Orderbook` | Orderbook updates |
+| `SubscriptionChannel::Trades` | Trade events |
+| `SubscriptionChannel::Markets` | Market-level updates |
+| `SubscriptionChannel::Prices` | AMM price data |
+| `SubscriptionChannel::SubscribeMarketPrices` | Market price subscriptions |
+
+### Authenticated channels
+
+| Variant | Description |
+|---------|-------------|
+| `SubscriptionChannel::Orders` | Your order updates |
+| `SubscriptionChannel::Fills` | Your fill updates |
+| `SubscriptionChannel::SubscribePositions` | Your position updates |
+| `SubscriptionChannel::SubscribeTransactions` | Your transaction updates |
+
+### `SubscriptionOptions`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `market_slug` | `Option<String>` | Single market slug |
+| `market_slugs` | `Vec<String>` | Multiple market slugs |
+| `market_address` | `Option<String>` | Single market address |
+| `market_addresses` | `Vec<String>` | Multiple market addresses |
+| `filters` | `BTreeMap<String, Value>` | Additional filters |
+
+## Unsubscribing
+
+```rust
+ws.unsubscribe(
+    SubscriptionChannel::Orderbook,
+    SubscriptionOptions {
+        market_slugs: vec!["btc-above-100k-march-2025".to_string()],
+        ..Default::default()
+    },
+)
+.await?;
+```
+
+## Updating credentials
+
+You can rotate credentials at runtime:
+
+```rust
+ws.set_api_key("lmts_new_key_here");
+```
+
+or:
+
+```rust
+use limitless_exchange_rust_sdk::HmacCredentials;
+
+ws.set_hmac_credentials(HmacCredentials {
+    token_id: "new-token-id".to_string(),
+    secret: "new-base64-secret".to_string(),
+});
+```
+
+If the socket is already connected, the client reconnects automatically with the new credentials.
+
+## Auto-reconnect
+
+When `auto_reconnect` is enabled, the client reconnects and replays saved subscriptions automatically.
+
+<Note>
+  The Rust client preserves normalized subscription options internally, so reconnects restore previous subscriptions without extra application code.
+</Note>

@@ -5,7 +5,7 @@ description: "Create and manage orders with the Python SDK"
 
 ## Overview
 
-The `OrderClient` handles order creation, EIP-712 signing, and order management. It supports both Good-Till-Cancelled (GTC) limit orders and Fill-or-Kill (FOK) market orders.
+The `OrderClient` handles order creation, EIP-712 signing, and order management. It supports Good-Till-Cancelled (GTC), Fill-And-Kill (FAK), and Fill-or-Kill (FOK) orders.
 
 ## Prerequisites
 
@@ -178,6 +178,37 @@ result = await order_client.create_order(
 | `market_slug` | `str` | Market slug for venue lookup |
 | `post_only` | `bool` | Optional. When `True`, rejects the order if it would immediately match. Default `False`. |
 
+## FAK Orders (Fill-And-Kill)
+
+FAK orders use the same `price` and `size` inputs as GTC, but they only consume immediately available liquidity and cancel any unmatched remainder.
+
+`post_only` is not supported for FAK orders.
+
+```python
+response = await order_client.create_order(
+    token_id=market.tokens.yes,
+    price=0.45,
+    size=10.0,
+    side=Side.BUY,
+    order_type=OrderType.FAK,
+    market_slug="btc-above-100k-march-2025",
+)
+
+if response.maker_matches:
+    print(f"FAK order matched immediately with {len(response.maker_matches)} fill(s)")
+else:
+    print("FAK remainder was cancelled.")
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `token_id` | `str` | Token ID from `market.tokens.yes` or `market.tokens.no` |
+| `price` | `float` | Price per share in dollars (0.01 to 0.99) |
+| `size` | `float` | Number of shares to buy or sell |
+| `side` | `Side` | `Side.BUY` or `Side.SELL` |
+| `order_type` | `OrderType` | `OrderType.FAK` |
+| `market_slug` | `str` | Market slug for venue lookup |
+
 ## FOK Orders (Fill-or-Kill)
 
 FOK orders execute immediately and fully, or are rejected entirely. Instead of `price` and `size`, you specify `maker_amount`:
@@ -244,6 +275,7 @@ FOK orders execute immediately and fully, or are rejected entirely. Instead of `
 | Value | Description |
 |-------|-------------|
 | `OrderType.GTC` | Good-Till-Cancelled limit order (rests on the book) |
+| `OrderType.FAK` | Fill-And-Kill limit order (cancels any unmatched remainder) |
 | `OrderType.FOK` | Fill-or-Kill market order (fills immediately or rejects) |
 
 ## Error Handling
@@ -300,6 +332,17 @@ async def main():
             market_slug="btc-above-100k-march-2025",
         )
         print("GTC order placed:", result)
+
+        # Place a FAK BUY order for 10 YES shares at $0.45
+        fak_result = await order_client.create_order(
+            token_id=market.tokens.yes,
+            price=0.45,
+            size=10.0,
+            side=Side.BUY,
+            order_type=OrderType.FAK,
+            market_slug="btc-above-100k-march-2025",
+        )
+        print("FAK order placed:", fak_result)
 
         # Place a FOK BUY order spending 5 USDC
         fok_result = await order_client.create_order(
