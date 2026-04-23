@@ -69,7 +69,8 @@ All orders on Limitless are signed using **EIP-712 structured data**. The venue'
 | Type | Description |
 |------|-------------|
 | **GTC** (Good Till Cancelled) | Remains active until filled or cancelled |
-| **FOK** (Fill or Kill) | Must fill completely or be cancelled |
+| **FAK** (Fill And Kill) | Matches immediately available liquidity; any unmatched remainder is cancelled |
+| **FOK** (Fill Or Kill) | Must fill completely or be cancelled |
 
 ## Amount Calculation
 
@@ -91,6 +92,16 @@ takerAmount = 10 * 1e6         = 10,000,000
 makerAmount = 10 * 1e6         = 10,000,000
 takerAmount = 0.50 * 10 * 1e6  = 5,000,000
 ```
+
+### FAK (fill-and-kill limit orders)
+
+FAK orders build `makerAmount` and `takerAmount` with the same price/size formulas as GTC, but the matching engine treats the fields differently:
+
+- `makerAmount` is the **hard spend cap** — the order tries to use the full amount (USDC to spend for BUY, shares to sell for SELL).
+- `takerAmount` is a **protected minimum** — the minimum output implied by the signed price (shares to receive for BUY, USDC to receive for SELL), acting as slippage protection rather than a hard cap on matched size.
+- Any portion not matched at or better than the signed price is cancelled; FAK never rests on the book.
+
+`postOnly` is not supported for FAK.
 
 ### FOK (market orders)
 
