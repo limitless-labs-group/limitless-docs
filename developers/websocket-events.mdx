@@ -91,6 +91,65 @@ socket.on('positions', (data) => {
   Position updates are pushed automatically when your balances change (e.g. after a trade is mined). You do not need to poll.
 </Note>
 
+## Subscribing to Order Events
+
+Subscribe to the full lifecycle of your CLOB orders by emitting `subscribe_order_events`. Requires authentication via the `X-API-Key` header. The subscription takes no payload — it is a per-user channel that delivers events for every order you are party to.
+
+Two distinct event shapes arrive on the same Socket.IO event name `orderEvent`. Distinguish by the `source` field:
+
+- **`OME`** — off-chain matching engine state changes: `PLACEMENT`, `UPDATE`, `CANCELLATION`.
+- **`SETTLEMENT`** — on-chain settlement results for CLOB trades: `MINED`, `FAILED`.
+
+```typescript
+import { io } from 'socket.io-client';
+
+const socket = io('wss://ws.limitless.exchange/markets', {
+  transports: ['websocket'],
+  extraHeaders: { 'X-API-Key': 'lmts_your_key_here' },
+});
+
+socket.on('connect', () => {
+  socket.emit('subscribe_order_events');
+});
+
+socket.on('system', (msg) => {
+  // { message: 'Successfully subscribed to order event updates' }
+  console.log(msg);
+});
+
+socket.on('orderEvent', (data) => {
+  if (data.source === 'OME') {
+    console.log(`[OME ${data.type}] order=${data.orderId} ${data.side} ${data.remainingSize} @ ${data.price}`);
+  } else {
+    console.log(`[SETTLEMENT ${data.type}] tx=${data.txHash ?? '(none)'} takerOrder=${data.takerOrderId ?? '(none)'}`);
+  }
+});
+```
+
+<Warning>
+  **One subscription per connection.** Sending `subscribe_order_events` a second time re-binds; the previous subscription is cancelled. There is no payload.
+</Warning>
+
+<Note>
+  **Channel is per-user, not per-market.** You receive events for every order you are party to (as taker or maker) — the subscription cannot be narrowed by market. Filter client-side on `marketId` / `marketSlug` if needed.
+</Note>
+
+<Warning>
+  **Ordering is not guaranteed across sources.** OME and SETTLEMENT events for the same order can arrive in either order within a few seconds — settlement can land before the corresponding `UPDATE`, or vice versa. Treat them as independent streams that both reference `orderId` / `takerOrderId`.
+</Warning>
+
+<Note>
+  **Resubscribe on reconnect.** Subscriptions are not persisted server-side across disconnects — your `connect` handler must re-emit `subscribe_order_events`.
+</Note>
+
+<Note>
+  **Server-side deduplication.** Repeated emissions within a 60-second sliding window are dropped, so retries and replays will not double-deliver. Client-side dedup is only required if you persist events across reconnects yourself.
+</Note>
+
+<Warning>
+  **Auth failures surface on the `exception` channel.** If the `X-API-Key` header is missing, invalid, or revoked, the guard emits a `WsException` to the client's `exception` event and no `orderEvent` frames arrive. Subscribe to `socket.on('exception', ...)` if you want to detect auth failures rather than silently miss the stream.
+</Warning>
+
 ## Subscribing to Market Lifecycle Events
 
 Subscribe to market creation and resolution events by emitting `subscribe_market_lifecycle`. No authentication required.
@@ -127,6 +186,7 @@ socket.emit('unsubscribe_market_lifecycle');
 | `disconnect` | Server → Client | No | Connection lost |
 | `subscribe_market_prices` | Client → Server | No | Subscribe to price/orderbook updates |
 | `subscribe_positions` | Client → Server | Yes | Subscribe to position updates |
+| `subscribe_order_events` | Client → Server | Yes | Subscribe to OME and settlement events for your CLOB orders |
 | `subscribe_market_lifecycle` | Client → Server | No | Subscribe to market creation/resolution events |
 | `unsubscribe_market_lifecycle` | Client → Server | No | Unsubscribe from market lifecycle events |
 | `newPriceData` | Server → Client | No | AMM market price update |
@@ -134,6 +194,7 @@ socket.emit('unsubscribe_market_lifecycle');
 | `marketCreated` | Server → Client | No | New market created and visible |
 | `marketResolved` | Server → Client | No | Market resolved with winning outcome |
 | `positions` | Server → Client | Yes | Position balance update |
+| `orderEvent` | Server → Client | Yes | OME or settlement update for one of your CLOB orders |
 | `system` | Server → Client | No | System notifications |
 | `authenticated` | Server → Client | Yes | Authentication confirmation |
 | `exception` | Server → Client | No | Error notifications |
@@ -252,3 +313,91 @@ Emitted when a market resolves. Sent to both `market_lifecycle` subscribers and 
 | `winningOutcome` | `'YES' \| 'NO'` | The winning outcome |
 | `winningIndex` | `0 \| 1` | Index of the winning outcome (0 = YES, 1 = NO) |
 | `resolutionDate` | `string` | ISO-8601 resolution timestamp |
+
+### `orderEvent`
+
+Emitted for both OME state changes and on-chain settlement results. Distinguish the two shapes by the `source` field.
+
+#### OME event (`source: "OME"`)
+
+Emitted for every order state change recorded by the matching engine. `price` and `remainingSize` are decimal strings — do not parse them as `number` for comparisons.
+
+```json
+{
+  "source": "OME",
+  "type": "PLACEMENT",
+  "eventId": 1234567,
+  "orderId": "550e8400-e29b-41d4-a716-446655440000",
+  "userId": 42,
+  "marketId": "17",
+  "token": "87893014956437093847...",
+  "side": "BUY",
+  "price": "0.53",
+  "remainingSize": "100",
+  "timestamp": "2026-04-20T10:15:30.000Z"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source` | `'OME'` | Discriminator for the OME shape |
+| `type` | `'PLACEMENT' \| 'UPDATE' \| 'CANCELLATION'` | OME state transition |
+| `eventId` | `number` | Monotonic OME event id |
+| `orderId` | `string` | UUID of the order |
+| `userId` | `number` | Internal user id of the order owner |
+| `marketId` | `string` | Numeric market id (CLOB) |
+| `token` | `string` | CTF token id (decimal string) |
+| `side` | `'BUY' \| 'SELL'` | Order side |
+| `price` | `string` | Limit price (decimal string) |
+| `remainingSize` | `string` | Size remaining on the book (decimal string) |
+| `timestamp` | `string` | ISO-8601 event timestamp |
+
+`type` transitions:
+
+- `PLACEMENT` — order accepted by the OME.
+- `UPDATE` — remaining size changed (partial fill or amend).
+- `CANCELLATION` — removed from the book.
+
+#### Settlement event (`source: "SETTLEMENT"`)
+
+Emitted when the taker side of a CLOB trade settles on-chain. One event per user involved in the trade (taker plus each maker), keyed by `userId`. `takerAccount` and `makerMatches[].account` are on-chain addresses — for smart-wallet users this is the smart-wallet proxy, for EOA users it is the EOA.
+
+```json
+{
+  "source": "SETTLEMENT",
+  "type": "MINED",
+  "eventId": "settlement:1b3a…",
+  "orderId": "550e8400-e29b-41d4-a716-446655440000",
+  "userId": 42,
+  "takerOrderId": "e4c3…",
+  "takerAccount": "0xAbC…123",
+  "makerMatches": [
+    {
+      "account": "0xDeF…456",
+      "orderId": "cb12…",
+      "matchedSize": "25",
+      "price": "0.53"
+    }
+  ],
+  "marketSlug": "will-abc-happen-by-2026",
+  "txHash": "0xabc…",
+  "timestamp": "2026-04-20T10:15:40.000Z"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source` | `'SETTLEMENT'` | Discriminator for the settlement shape |
+| `type` | `'MINED' \| 'FAILED'` | Settlement outcome |
+| `eventId` | `string` | `settlement:<tradeEventId>` |
+| `orderId` | `string?` | UUID of the order this event is keyed to |
+| `userId` | `number` | Internal user id of the recipient |
+| `takerOrderId` | `string?` | UUID of the taker order in the trade |
+| `takerAccount` | `string?` | On-chain address of the taker (smart-wallet proxy or EOA) |
+| `makerMatches` | `array?` | One entry per matched maker (account, orderId, matchedSize, price) |
+| `marketSlug` | `string?` | CLOB market slug |
+| `txHash` | `string?` | Settlement transaction hash, when known |
+| `timestamp` | `string` | ISO-8601 event timestamp |
+
+- `type: "MINED"` — on-chain settlement confirmed.
+- `type: "FAILED"` — settlement failed on-chain; the taker order did not execute and funds were not moved.
