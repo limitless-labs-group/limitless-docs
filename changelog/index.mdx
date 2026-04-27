@@ -5,6 +5,72 @@ description: "Notable changes to the Limitless Exchange platform, API, and SDKs"
 
 Welcome to the Limitless Changelog. Here you'll find important changes to the Limitless Exchange platform including API updates, SDK releases, and new features.
 
+## Apr 27, 2026
+
+### Rust SDK v1.0.7: Initial Stable Release
+
+The official Rust SDK is now documented with full coverage for individual traders, bot builders, and partner integrations.
+
+**Highlights:**
+- Typed async client for CLOB and NegRisk markets
+- Root `Client` entrypoint for markets, portfolio, market pages, API tokens, partner accounts, delegated orders, server wallets, and WebSockets
+- Built-in EIP-712 order building and signing on Base
+- API key and HMAC authentication support
+- Async WebSocket streaming with reconnect handling
+- Pluggable logging, retry helpers, and builder-style HTTP configuration
+
+**Documentation:** [Rust SDK](/developers/sdk/rust/getting-started)
+
+### Order Execution: FAK Orders Added to Signing and SDK Docs
+
+Fill-and-kill (FAK) orders are now documented across the developer guides. FAK orders use the same `price` and `size` inputs as GTC limit orders, match immediately against available liquidity, and cancel any unmatched remainder instead of resting on the book.
+
+**Updated docs:**
+- EIP-712 signing now includes FAK in the order type reference and amount-calculation guidance
+- TypeScript SDK order docs include FAK examples and parameter reference
+- Programmatic API delegated orders now show GTC, FAK, and FOK flows
+
+**Documentation:** [EIP-712 Signing](/developers/eip712-signing) | [TypeScript SDK Orders](/developers/sdk/typescript/orders) | [Programmatic API](/developers/programmatic-api)
+
+### WebSocket Order Events
+
+Authenticated WebSocket clients can now subscribe to the CLOB order lifecycle with `subscribe_order_events`.
+
+**New realtime stream:**
+- Emits `orderEvent` messages for both off-chain matching-engine updates and on-chain settlement results
+- OME events cover placement, updates, and cancellations
+- Settlement events cover mined and failed transaction outcomes
+- Auth failures are surfaced on the `exception` channel
+- Clients should resubscribe on reconnect and treat OME and settlement events as independent streams
+
+**Documentation:** [WebSocket Events](/developers/websocket-events#subscribing-to-order-events)
+
+### Portfolio History Cursor Contract and Partner Position Headers
+
+Portfolio and partner account docs were updated for integrations that page through account activity or query positions on behalf of managed accounts.
+
+**API documentation updates:**
+- `GET /portfolio/history` now reflects the cursor-based pagination contract
+- Position reads now document partner `onBehalfOf` usage for managed account flows
+- Server-wallet redemption docs clarify the difference between API resolution state and on-chain conditional-token settlement
+
+**Documentation:** [Portfolio History](/api-reference/portfolio/history) | [Get Positions](/api-reference/portfolio/positions) | [Programmatic API](/developers/programmatic-api#lifecycle-after-a-trade)
+
+### Developer Onboarding and Partner Flow Updates
+
+Developer onboarding now more clearly separates the individual trader/bot path from the platform/partner path.
+
+**Updated guidance:**
+- Individual traders and bot builders can use API keys or self-service scoped trading tokens without applying for partner access
+- Platform partners should use backend-held HMAC credentials, sub-accounts, and delegated signing
+- Programmatic API docs now include the partner application link and updated signing guidance
+
+**Documentation:** [For Developers](/developers/introduction) | [Authentication](/developers/authentication) | [Programmatic API](/developers/programmatic-api)
+
+### Brand Assets and Support Contact
+
+Brand assets were refreshed and the docs support link now points to `help@limitless.network`.
+
 ## Apr 14, 2026
 
 ### SDK v1.0.6: Server Wallet Claim & 100% Maker Rebates
