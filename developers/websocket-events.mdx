@@ -147,7 +147,7 @@ socket.on('orderEvent', (data) => {
 </Note>
 
 <Warning>
-  **Silent on missing auth.** If the `X-API-Key` header is missing or invalid, the subscribe call is silently dropped — no `orderEvent` frames will arrive and no error is emitted.
+  **Auth failures surface on the `exception` channel.** If the `X-API-Key` header is missing, invalid, or revoked, the guard emits a `WsException` to the client's `exception` event and no `orderEvent` frames arrive. Subscribe to `socket.on('exception', ...)` if you want to detect auth failures rather than silently miss the stream.
 </Warning>
 
 ## Subscribing to Market Lifecycle Events
@@ -396,7 +396,7 @@ Emitted when the taker side of a CLOB trade settles on-chain. One event per user
 | `takerAccount` | `string?` | On-chain address of the taker (smart-wallet proxy or EOA) |
 | `makerMatches` | `array?` | One entry per matched maker (account, orderId, matchedSize, price) |
 | `marketSlug` | `string?` | CLOB market slug |
-| `txHash` | `string?` | Settlement transaction hash (present on `MINED`, may be absent on `FAILED`) |
+| `txHash` | `string?` | Settlement transaction hash, when known |
 | `timestamp` | `string` | ISO-8601 event timestamp |
 
 - `type: "MINED"` — on-chain settlement confirmed.
