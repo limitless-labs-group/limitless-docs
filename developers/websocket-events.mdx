@@ -328,6 +328,7 @@ Emitted for every order state change recorded by the matching engine. `price` an
   "type": "PLACEMENT",
   "eventId": 1234567,
   "orderId": "550e8400-e29b-41d4-a716-446655440000",
+  "clientOrderId": "client-order-001",
   "userId": 42,
   "marketId": "17",
   "token": "87893014956437093847...",
@@ -344,6 +345,7 @@ Emitted for every order state change recorded by the matching engine. `price` an
 | `type` | `'PLACEMENT' \| 'UPDATE' \| 'CANCELLATION'` | OME state transition |
 | `eventId` | `number` | Monotonic OME event id |
 | `orderId` | `string` | UUID of the order |
+| `clientOrderId` | `string?` | Client-supplied id from `POST /orders`, when the order was placed with one. Field is omitted (not `null`) when the originating order had no client id. |
 | `userId` | `number` | Internal user id of the order owner |
 | `marketId` | `string` | Numeric market id (CLOB) |
 | `token` | `string` | CTF token id (decimal string) |
@@ -368,6 +370,7 @@ Emitted when the taker side of a CLOB trade settles on-chain. One event per user
   "type": "MINED",
   "eventId": "settlement:1b3a…",
   "orderId": "550e8400-e29b-41d4-a716-446655440000",
+  "clientOrderId": "client-order-001",
   "userId": 42,
   "takerOrderId": "e4c3…",
   "takerAccount": "0xAbC…123",
@@ -391,6 +394,7 @@ Emitted when the taker side of a CLOB trade settles on-chain. One event per user
 | `type` | `'MINED' \| 'FAILED'` | Settlement outcome |
 | `eventId` | `string` | `settlement:<tradeEventId>` |
 | `orderId` | `string?` | UUID of the order this event is keyed to |
+| `clientOrderId` | `string?` | Client-supplied id of the recipient's own order (`orderId`), when the order was placed with one. Field is omitted (not `null`) when the originating order had no client id. Counterparty (`takerOrderId`, `makerMatches[].orderId`) ids are never resolved to client ids. |
 | `userId` | `number` | Internal user id of the recipient |
 | `takerOrderId` | `string?` | UUID of the taker order in the trade |
 | `takerAccount` | `string?` | On-chain address of the taker (smart-wallet proxy or EOA) |
@@ -398,6 +402,10 @@ Emitted when the taker side of a CLOB trade settles on-chain. One event per user
 | `marketSlug` | `string?` | CLOB market slug |
 | `txHash` | `string?` | Settlement transaction hash, when known |
 | `timestamp` | `string` | ISO-8601 event timestamp |
+
+<Note>
+  **Reconciling WS events with `POST /orders`.** Submit an order with a `clientOrderId` and every `orderEvent` for that order — `PLACEMENT`, `UPDATE`, `CANCELLATION`, and the `MINED` / `FAILED` settlement frame — echoes the same `clientOrderId`. Match WS events to the originating request by `clientOrderId` rather than waiting for the `POST /orders` HTTP response, which only returns once settlement is `MINED`.
+</Note>
 
 - `type: "MINED"` — on-chain settlement confirmed.
 - `type: "FAILED"` — settlement failed on-chain; the taker order did not execute and funds were not moved.
