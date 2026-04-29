@@ -5,6 +5,28 @@ description: "Notable changes to the Limitless Exchange platform, API, and SDKs"
 
 Welcome to the Limitless Changelog. Here you'll find important changes to the Limitless Exchange platform including API updates, SDK releases, and new features.
 
+## Apr 29, 2026
+
+### `clientOrderId` echoed on every WebSocket `orderEvent`
+
+Integrators can now reconcile WebSocket frames back to the originating `POST /orders` request without waiting on the HTTP response.
+
+**What's new:**
+- When you submit an order with a `clientOrderId`, every subsequent `orderEvent` for that order — `PLACEMENT`, `UPDATE`, `CANCELLATION`, and the `MINED` / `FAILED` settlement frame — echoes the same `clientOrderId` value.
+- The field is omitted (not `null`) when the originating order had no client id.
+- Counterparty ids (`takerOrderId`, `makerMatches[].orderId`) are intentionally **not** resolved — only the recipient user's own order maps to its client id.
+
+**Why it matters:**
+- The HTTP `POST /orders` path blocks until 1-conf settlement (`settlementStatus: MINED`). Previously, clients could not tie inflight WebSocket frames to a specific request id until the HTTP call returned.
+- With this change, your client can fire an order, listen on `subscribe_order_events`, and reconcile every lifecycle event by `clientOrderId` immediately — placement, partial fills, cancellation, and on-chain settlement.
+
+**Event payload note:**
+- OME shapes carry `eventId: number` (monotonic SERIAL from the matching engine).
+- Settlement shapes carry `eventId: string` in the form `settlement:<tradeEventId>`.
+- These are separate types — keep your client typing distinct between the two.
+
+**Documentation:** [WebSocket Events: subscribing to order events](/developers/websocket-events#subscribing-to-order-events) | [`orderEvent` payload reference](/developers/websocket-events#orderevent)
+
 ## Apr 27, 2026
 
 ### Rust SDK v1.0.7: Initial Stable Release
