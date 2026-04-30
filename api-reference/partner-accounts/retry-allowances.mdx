@@ -1,0 +1,119 @@
+---
+title: "Retry Partner Account Allowances"
+openapi: "POST /profiles/partner-accounts/{profileId}/allowances/retry"
+---
+
+<Info>
+  Requires **HMAC authentication** with the `account_creation` and `delegated_signing` scopes. API key auth and Privy auth are not accepted.
+</Info>
+
+Retries delegated-trading allowance recovery for a partner-created server-wallet sub-account.
+
+The retry operation:
+
+- takes a short lock for the wallet
+- re-checks live chain state before submitting
+- submits only targets that are still missing
+- returns `submitted` only for targets this request submitted as a sponsored transaction or user operation
+
+- Route: `POST /profiles/partner-accounts/:profileId/allowances/retry`
+- Auth: HMAC api-token auth
+- Scopes: `account_creation` + `delegated_signing`
+- `profileId`: child/server-wallet profile id that belongs to the authenticated partner
+
+## Path parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `profileId` | `number` | Yes | Partner sub-account profile id for the server-wallet child account. |
+
+## Request body
+
+No request body is required.
+
+```json
+{}
+```
+
+## Response
+
+Returns the same shape as [Check Partner Account Allowances](/api-reference/partner-accounts/check-allowances).
+
+```json
+{
+  "profileId": 4543,
+  "partnerProfileId": 4430,
+  "chainId": 84532,
+  "walletAddress": "0x1a665817f063Ee15C6C2c05D4315982145825C3D",
+  "ready": false,
+  "summary": {
+    "total": 10,
+    "confirmed": 2,
+    "missing": 0,
+    "submitted": 8,
+    "failed": 0
+  },
+  "targets": [
+    {
+      "type": "USDC_ALLOWANCE",
+      "tokenAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "spenderOrOperator": "0x54d696A602343063000B25a51734E3BbE0Ec80a2",
+      "label": "ctf-exchange",
+      "requiredFor": "BUY",
+      "confirmed": false,
+      "status": "submitted",
+      "transactionId": "tx_...",
+      "userOperationHash": "0x...",
+      "retryable": false
+    }
+  ]
+}
+```
+
+<Note>
+  `submitted` does not mean the target is already confirmed on chain. It means this retry request submitted a sponsored transaction or user operation. Poll the GET endpoint again after a short delay.
+</Note>
+
+## Error responses
+
+| Status | Meaning | Partner action |
+|--------|---------|----------------|
+| `429` | Retry is rate limited. Response includes `retryAfterSeconds`. | Wait `retryAfterSeconds`, then call GET again. |
+| `409` | Another retry is already running for this wallet. | Wait briefly, then call GET again. |
+
+### 429 example
+
+```json
+{
+  "message": "Allowance retry rate limited",
+  "retryAfterSeconds": 30
+}
+```
+
+### 409 example
+
+```json
+{
+  "message": "Allowance retry already running"
+}
+```
+
+## Recommended flow
+
+1. Poll [Check Partner Account Allowances](/api-reference/partner-accounts/check-allowances).
+2. If `ready=true`, continue.
+3. If targets are `missing` or `failed` and `retryable=true`, call this endpoint.
+4. If this endpoint returns submitted targets, poll GET again after a short delay.
+5. If `429`, wait `retryAfterSeconds`.
+6. If `409`, wait briefly and call GET again.
+
+## Example
+
+```bash
+curl -X POST "https://api.limitless.exchange/profiles/partner-accounts/4543/allowances/retry" \
+  -H "content-type: application/json" \
+  -H "lmts-api-key: <tokenId>" \
+  -H "lmts-signature: <base64_hmac_sha256_signature>" \
+  -H "lmts-timestamp: <iso_8601_timestamp>" \
+  -d '{}'
+```

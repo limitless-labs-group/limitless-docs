@@ -45,8 +45,75 @@ println!("{}", account.account);
 ```
 
 <Note>
-  New server wallets often need a short backend provisioning window before the first delegated trade. A delay of a few seconds is normal.
+  New server wallets should be checked with `check_allowances` before the first delegated trade. If retryable targets are missing or failed, call `retry_allowances` and poll again.
 </Note>
+
+## Allowance recovery
+
+Server-wallet sub-accounts need delegated-trading approvals before they can trade. The partner allowance helpers use the Partner API only:
+
+- `check_allowances(profile_id)` calls `GET /profiles/partner-accounts/:profileId/allowances`
+- `retry_allowances(profile_id)` calls `POST /profiles/partner-accounts/:profileId/allowances/retry`
+- both methods require HMAC credentials with `account_creation` and `delegated_signing`
+- `profile_id` is the child/server-wallet profile id
+
+```rust
+use limitless_exchange_rust_sdk::{
+    LimitlessError, PARTNER_ACCOUNT_ALLOWANCE_STATUS_FAILED,
+    PARTNER_ACCOUNT_ALLOWANCE_STATUS_MISSING, PARTNER_ACCOUNT_ALLOWANCE_STATUS_SUBMITTED,
+};
+
+let mut allowances = client
+    .partner_accounts
+    .check_allowances(account.profile_id)
+    .await?;
+
+if !allowances.ready {
+    let retryable = allowances.targets.iter().any(|target| {
+        target.retryable
+            && matches!(
+                target.status.as_str(),
+                PARTNER_ACCOUNT_ALLOWANCE_STATUS_MISSING
+                    | PARTNER_ACCOUNT_ALLOWANCE_STATUS_FAILED
+            )
+    });
+
+    if retryable {
+        match client
+            .partner_accounts
+            .retry_allowances(account.profile_id)
+            .await
+        {
+            Ok(retried) => allowances = retried,
+            Err(LimitlessError::Api(err)) if err.status == 429 => {
+                println!("retryAfterSeconds is in err.data");
+            }
+            Err(LimitlessError::Api(err)) if err.status == 409 => {
+                println!("Retry already running; poll check_allowances again shortly.");
+            }
+            Err(err) => return Err(err.into()),
+        }
+    }
+}
+
+if allowances
+    .targets
+    .iter()
+    .any(|target| target.status == PARTNER_ACCOUNT_ALLOWANCE_STATUS_SUBMITTED)
+{
+    // A sponsored tx/user operation was submitted by this retry request.
+    // Poll check_allowances again after a short delay to observe confirmed chain state.
+}
+```
+
+Recommended partner flow:
+
+1. Poll `check_allowances(profile_id)`.
+2. If `ready == true`, continue.
+3. If targets are `missing` or `failed` with `retryable == true`, call `retry_allowances(profile_id)`.
+4. If retry returns `submitted` targets, poll `check_allowances` again after a short delay.
+5. If retry returns `429`, wait `retryAfterSeconds`.
+6. If retry returns `409`, wait briefly and call `check_allowances` again.
 
 ## EOA mode
 

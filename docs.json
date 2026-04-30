@@ -234,7 +234,9 @@
           {
             "group": "Partner Accounts",
             "pages": [
-              "api-reference/partner-accounts/create-partner-account"
+              "api-reference/partner-accounts/create-partner-account",
+              "api-reference/partner-accounts/check-allowances",
+              "api-reference/partner-accounts/retry-allowances"
             ]
           },
           {
