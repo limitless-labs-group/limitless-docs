@@ -43,7 +43,7 @@
     },
     {
       "name": "Partner Accounts",
-      "description": "Sub-account creation for partner integrations"
+      "description": "Sub-account creation and allowance recovery for partner integrations"
     }
   ],
   "paths": {
@@ -2540,6 +2540,130 @@
           "Partner Accounts"
         ]
       }
+    },
+    "/profiles/partner-accounts/{profileId}/allowances": {
+      "get": {
+        "summary": "Check partner account allowances",
+        "description": "Checks delegated-trading allowance readiness for a partner-created server-wallet sub-account. Requires HMAC authentication with `account_creation` and `delegated_signing` scopes. Status is based on live chain reads.",
+        "operationId": "ProfileController_checkPartnerAccountAllowances",
+        "parameters": [
+          {
+            "name": "profileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Partner sub-account profile ID for the server-wallet child account."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Live allowance state for the server-wallet child profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerAccountAllowanceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid profile ID or non-server-wallet child profile"
+          },
+          "401": {
+            "description": "Missing or invalid HMAC authentication"
+          },
+          "403": {
+            "description": "Requires account_creation and delegated_signing scopes, and profileId must belong to the authenticated partner"
+          },
+          "404": {
+            "description": "Partner sub-account profile not found"
+          }
+        },
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "tags": [
+          "Partner Accounts"
+        ]
+      }
+    },
+    "/profiles/partner-accounts/{profileId}/allowances/retry": {
+      "post": {
+        "summary": "Retry partner account allowances",
+        "description": "Retries delegated-trading allowance recovery for a partner-created server-wallet sub-account. The retry takes a short wallet lock, re-checks live chain state, and submits only targets still missing. A `submitted` target means this retry request submitted a sponsored transaction or user operation.",
+        "operationId": "ProfileController_retryPartnerAccountAllowances",
+        "parameters": [
+          {
+            "name": "profileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Partner sub-account profile ID for the server-wallet child account."
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Allowance state after retry submission attempts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerAccountAllowanceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid profile ID or non-server-wallet child profile"
+          },
+          "401": {
+            "description": "Missing or invalid HMAC authentication"
+          },
+          "403": {
+            "description": "Requires account_creation and delegated_signing scopes, and profileId must belong to the authenticated partner"
+          },
+          "404": {
+            "description": "Partner sub-account profile not found"
+          },
+          "409": {
+            "description": "Another retry is already running for this wallet"
+          },
+          "429": {
+            "description": "Retry is rate limited; response includes retryAfterSeconds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartnerAllowanceRetryRateLimitError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HmacAuth": []
+          }
+        ],
+        "tags": [
+          "Partner Accounts"
+        ]
+      }
     }
   },
   "components": {
@@ -4768,6 +4892,187 @@
           }
         },
         "required": ["profileId", "account"]
+      },
+      "PartnerAccountAllowanceSummary": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Total allowance target count",
+            "example": 10
+          },
+          "confirmed": {
+            "type": "integer",
+            "description": "Targets confirmed on chain",
+            "example": 2
+          },
+          "missing": {
+            "type": "integer",
+            "description": "Targets still missing",
+            "example": 0
+          },
+          "submitted": {
+            "type": "integer",
+            "description": "Targets submitted by the current retry response",
+            "example": 8
+          },
+          "failed": {
+            "type": "integer",
+            "description": "Targets whose latest live read or retry state failed",
+            "example": 0
+          }
+        },
+        "required": ["total", "confirmed", "missing", "submitted", "failed"]
+      },
+      "PartnerAccountAllowanceTarget": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["USDC_ALLOWANCE", "CTF_APPROVAL"],
+            "description": "Allowance target category",
+            "example": "USDC_ALLOWANCE"
+          },
+          "tokenAddress": {
+            "type": "string",
+            "description": "ERC20 or conditional-token contract address",
+            "example": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+          },
+          "spenderOrOperator": {
+            "type": "string",
+            "description": "Allowance spender or operator address",
+            "example": "0x54d696A602343063000B25a51734E3BbE0Ec80a2"
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable target label",
+            "example": "ctf-exchange"
+          },
+          "requiredFor": {
+            "type": "string",
+            "enum": ["BUY", "SELL"],
+            "description": "Trading side that requires this target",
+            "example": "BUY"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "description": "Whether this target is confirmed on chain",
+            "example": false
+          },
+          "status": {
+            "type": "string",
+            "enum": ["confirmed", "missing", "submitted", "failed"],
+            "description": "Current target status",
+            "example": "submitted"
+          },
+          "transactionId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Sponsored transaction ID when submitted",
+            "example": "tx_abc123"
+          },
+          "txHash": {
+            "type": "string",
+            "nullable": true,
+            "description": "Transaction hash when available",
+            "example": "0xabc123..."
+          },
+          "userOperationHash": {
+            "type": "string",
+            "nullable": true,
+            "description": "User operation hash when available",
+            "example": "0xdef456..."
+          },
+          "retryable": {
+            "type": "boolean",
+            "description": "Whether a retry request may attempt this target",
+            "example": true
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true,
+            "description": "Machine-readable failure code",
+            "example": "RPC_READ_FAILED"
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true,
+            "description": "Human-readable failure message"
+          }
+        },
+        "required": [
+          "type",
+          "tokenAddress",
+          "spenderOrOperator",
+          "label",
+          "requiredFor",
+          "confirmed",
+          "status",
+          "retryable"
+        ]
+      },
+      "PartnerAccountAllowanceResponse": {
+        "type": "object",
+        "properties": {
+          "profileId": {
+            "type": "integer",
+            "description": "Child/server-wallet profile ID being checked",
+            "example": 4543
+          },
+          "partnerProfileId": {
+            "type": "integer",
+            "description": "Authenticated parent partner profile ID",
+            "example": 4430
+          },
+          "chainId": {
+            "type": "integer",
+            "description": "Chain where allowance targets were checked",
+            "example": 84532
+          },
+          "walletAddress": {
+            "type": "string",
+            "description": "Managed server-wallet address for the child profile",
+            "example": "0x1a665817f063Ee15C6C2c05D4315982145825C3D"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "True when every target is confirmed on chain",
+            "example": false
+          },
+          "summary": {
+            "$ref": "#/components/schemas/PartnerAccountAllowanceSummary"
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartnerAccountAllowanceTarget"
+            }
+          }
+        },
+        "required": [
+          "profileId",
+          "partnerProfileId",
+          "chainId",
+          "walletAddress",
+          "ready",
+          "summary",
+          "targets"
+        ]
+      },
+      "PartnerAllowanceRetryRateLimitError": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Allowance retry rate limited"
+          },
+          "retryAfterSeconds": {
+            "type": "integer",
+            "description": "Seconds to wait before retrying",
+            "example": 30
+          }
+        },
+        "required": ["message", "retryAfterSeconds"]
       }
     }
   }

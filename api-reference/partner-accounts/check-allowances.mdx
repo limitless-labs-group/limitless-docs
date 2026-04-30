@@ -1,0 +1,102 @@
+---
+title: "Check Partner Account Allowances"
+openapi: "GET /profiles/partner-accounts/{profileId}/allowances"
+---
+
+<Info>
+  Requires **HMAC authentication** with the `account_creation` and `delegated_signing` scopes. API key auth and Privy auth are not accepted.
+</Info>
+
+Checks delegated-trading allowance readiness for a partner-created server-wallet sub-account. The response is based on live chain reads.
+
+- Route: `GET /profiles/partner-accounts/:profileId/allowances`
+- Auth: HMAC api-token auth
+- Scopes: `account_creation` + `delegated_signing`
+- `profileId`: child/server-wallet profile id that belongs to the authenticated partner
+
+## Path parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `profileId` | `number` | Yes | Partner sub-account profile id for the server-wallet child account. |
+
+## Response
+
+```json
+{
+  "profileId": 4543,
+  "partnerProfileId": 4430,
+  "chainId": 84532,
+  "walletAddress": "0x1a665817f063Ee15C6C2c05D4315982145825C3D",
+  "ready": false,
+  "summary": {
+    "total": 10,
+    "confirmed": 0,
+    "missing": 2,
+    "submitted": 0,
+    "failed": 8
+  },
+  "targets": [
+    {
+      "type": "USDC_ALLOWANCE",
+      "tokenAddress": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "spenderOrOperator": "0x54d696A602343063000B25a51734E3BbE0Ec80a2",
+      "label": "ctf-exchange",
+      "requiredFor": "BUY",
+      "confirmed": false,
+      "status": "missing",
+      "retryable": true
+    }
+  ]
+}
+```
+
+## Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `profileId` | `number` | Child/server-wallet profile id being checked. |
+| `partnerProfileId` | `number` | Authenticated parent partner profile id. |
+| `chainId` | `number` | Chain where allowance targets were checked. |
+| `walletAddress` | `string` | Managed server-wallet address for the child profile. |
+| `ready` | `boolean` | `true` when every target is confirmed on chain. |
+| `summary.total` | `number` | Total target count. |
+| `summary.confirmed` | `number` | Targets confirmed on chain. |
+| `summary.missing` | `number` | Targets still missing. |
+| `summary.submitted` | `number` | Targets submitted by the current retry response. For GET responses this is usually `0`. |
+| `summary.failed` | `number` | Targets whose latest live read or retry state failed. |
+| `targets[]` | `array` | Per-target allowance or approval state. |
+
+## Target fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | `USDC_ALLOWANCE` \| `CTF_APPROVAL` | Target category. |
+| `tokenAddress` | `string` | ERC20 or conditional-token contract address. |
+| `spenderOrOperator` | `string` | Allowance spender or operator address. |
+| `label` | `string` | Human-readable target label. |
+| `requiredFor` | `BUY` \| `SELL` | Trading side that requires this approval. |
+| `confirmed` | `boolean` | Whether this target is confirmed on chain. |
+| `status` | `confirmed` \| `missing` \| `submitted` \| `failed` | Current target status. |
+| `retryable` | `boolean` | Whether `POST /retry` may attempt this target. |
+| `transactionId` | `string` | Optional sponsored transaction id when submitted. |
+| `txHash` | `string` | Optional transaction hash when available. |
+| `userOperationHash` | `string` | Optional user operation hash when available. |
+| `errorCode` | `string` | Optional machine-readable failure code, such as `RPC_READ_FAILED`. |
+| `errorMessage` | `string` | Optional human-readable failure message. |
+
+## Recommended flow
+
+1. Poll this endpoint.
+2. If `ready=true`, continue with delegated trading.
+3. If targets are `missing` or `failed` and `retryable=true`, call [Retry Partner Account Allowances](/api-reference/partner-accounts/retry-allowances).
+4. If retry submits targets, poll this endpoint again after a short delay.
+
+## Example
+
+```bash
+curl "https://api.limitless.exchange/profiles/partner-accounts/4543/allowances" \
+  -H "lmts-api-key: <tokenId>" \
+  -H "lmts-signature: <base64_hmac_sha256_signature>" \
+  -H "lmts-timestamp: <iso_8601_timestamp>"
+```

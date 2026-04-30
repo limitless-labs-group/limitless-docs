@@ -37,8 +37,52 @@ print(account.account)     # wallet address
 ```
 
 <Note>
-  New server wallets need the backend allowance provisioning to complete before the first delegated trade. A short delay (a few seconds) is typical.
+  New server wallets should be checked with `check_allowances()` before the first delegated trade. If retryable targets are missing or failed, call `retry_allowances()` and poll again.
 </Note>
+
+## Allowance recovery
+
+Server-wallet sub-accounts need delegated-trading approvals before they can trade. The partner allowance helpers use the Partner API only:
+
+- `check_allowances(profile_id)` calls `GET /profiles/partner-accounts/:profileId/allowances`
+- `retry_allowances(profile_id)` calls `POST /profiles/partner-accounts/:profileId/allowances/retry`
+- both methods require HMAC credentials with `account_creation` and `delegated_signing`
+- `profile_id` is the child/server-wallet profile id
+
+```python
+from limitless_sdk import ConflictError, RateLimitError
+
+allowances = await client.partner_accounts.check_allowances(account.profile_id)
+
+if not allowances.ready:
+    retryable_targets = [
+        target
+        for target in allowances.targets
+        if target.retryable and target.status in {"missing", "failed"}
+    ]
+
+    if retryable_targets:
+        try:
+            allowances = await client.partner_accounts.retry_allowances(account.profile_id)
+        except RateLimitError as error:
+            print(error.response_data.get("retryAfterSeconds"))
+        except ConflictError:
+            print("Retry already running; poll check_allowances again shortly.")
+
+if any(target.status == "submitted" for target in allowances.targets):
+    # A sponsored tx/user operation was submitted by this retry request.
+    # Poll check_allowances() again after a short delay to observe confirmed chain state.
+    pass
+```
+
+Recommended partner flow:
+
+1. Poll `check_allowances(profile_id)`.
+2. If `ready is True`, continue.
+3. If targets are `missing` or `failed` with `retryable=True`, call `retry_allowances(profile_id)`.
+4. If retry returns `submitted` targets, poll `check_allowances()` again after a short delay.
+5. If retry returns `429`, wait `retryAfterSeconds`.
+6. If retry returns `409`, wait briefly and call `check_allowances()` again.
 
 ## EOA mode
 

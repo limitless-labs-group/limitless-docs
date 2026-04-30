@@ -204,6 +204,8 @@ const fokOrder = await scopedClient.delegatedOrders.createOrder({
 | Place or cancel orders (`POST /orders`) | `trading` |
 | Create sub-accounts (`POST /profiles/partner-accounts`) | `account_creation` |
 | Create sub-accounts with server wallets (`createServerWallet: true`) | `account_creation` + `delegated_signing` |
+| Check server-wallet allowances (`GET /profiles/partner-accounts/:profileId/allowances`) | `account_creation` + `delegated_signing` |
+| Retry server-wallet allowances (`POST /profiles/partner-accounts/:profileId/allowances/retry`) | `account_creation` + `delegated_signing` |
 | Submit unsigned orders (server signs) | `trading` + `delegated_signing` |
 | Redeem resolved positions (`POST /portfolio/redeem`) | `trading` |
 | Withdraw funds (`POST /portfolio/withdraw`) | `withdrawal` |
@@ -212,11 +214,22 @@ const fokOrder = await scopedClient.delegatedOrders.createOrder({
 
 ### Server wallet (Web2 partners)
 
-Set `createServerWallet: true` when creating a sub-account. The server provisions a managed Privy wallet and links it to the profile. The partner submits unsigned orders and the server signs them via the managed wallet. Token approvals are provisioned automatically.
+Set `createServerWallet: true` when creating a sub-account. The server provisions a managed Privy wallet and links it to the profile. The partner submits unsigned orders and the server signs them via the managed wallet.
 
 <Warning>
   Server wallet mode requires both `account_creation` and `delegated_signing` scopes on your API token.
 </Warning>
+
+#### Allowance readiness before trading
+
+Before placing the first delegated order for a server-wallet child profile, check live allowance state:
+
+1. Poll [`GET /profiles/partner-accounts/:profileId/allowances`](/api-reference/partner-accounts/check-allowances).
+2. If `ready=true`, continue with delegated trading.
+3. If targets are `missing` or `failed` with `retryable=true`, call [`POST /profiles/partner-accounts/:profileId/allowances/retry`](/api-reference/partner-accounts/retry-allowances).
+4. If retry returns `submitted` targets, poll GET again after a short delay.
+5. If retry returns `429`, wait `retryAfterSeconds`.
+6. If retry returns `409`, wait briefly and call GET again.
 
 #### Lifecycle after a trade
 
@@ -239,7 +252,7 @@ Server wallet partner flows now include direct endpoints for payout settlement a
 - [`POST /portfolio/redeem`](/api-reference/portfolio/redeem) to submit `redeemPositions` for a resolved condition.
 - [`POST /portfolio/withdraw`](/api-reference/portfolio/withdraw) to transfer ERC20 funds from a managed sub-account server wallet to the partner's own account or smart wallet.
 
-As of SDK v1.0.6, all three SDKs provide helper methods for server wallet claim (redeem) and withdrawal. See the SDK getting-started pages for details.
+As of SDK v1.0.6, the SDKs provide helper methods for server wallet claim (redeem) and withdrawal. See the SDK getting-started pages for details.
 
 ### EOA (Web3 partners)
 

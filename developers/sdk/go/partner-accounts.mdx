@@ -39,8 +39,68 @@ fmt.Println(account.Account)
 ```
 
 <Note>
-  New server wallets need the backend allowance provisioning to complete before the first delegated trade. A short delay (a few seconds) is typical.
+  New server wallets should be checked with `CheckAllowances` before the first delegated trade. If retryable targets are missing or failed, call `RetryAllowances` and poll again.
 </Note>
+
+## Allowance recovery
+
+Server-wallet sub-accounts need delegated-trading approvals before they can trade. The partner allowance helpers use the Partner API only:
+
+- `CheckAllowances(ctx, profileID)` calls `GET /profiles/partner-accounts/:profileId/allowances`
+- `RetryAllowances(ctx, profileID)` calls `POST /profiles/partner-accounts/:profileId/allowances/retry`
+- both methods require HMAC credentials with `account_creation` and `delegated_signing`
+- `profileID` is the child/server-wallet profile id
+
+```go
+allowances, err := client.PartnerAccounts.CheckAllowances(ctx, account.ProfileID)
+if err != nil {
+    log.Fatal(err)
+}
+
+if !allowances.Ready {
+    retryable := false
+    for _, target := range allowances.Targets {
+        if target.Retryable &&
+            (target.Status == limitless.PartnerAccountAllowanceStatusMissing ||
+                target.Status == limitless.PartnerAccountAllowanceStatusFailed) {
+            retryable = true
+            break
+        }
+    }
+
+    if retryable {
+        allowances, err = client.PartnerAccounts.RetryAllowances(ctx, account.ProfileID)
+        if err != nil {
+            var rateLimitErr *limitless.RateLimitError
+            var conflictErr *limitless.ConflictError
+            switch {
+            case errors.As(err, &rateLimitErr):
+                fmt.Println("retryAfterSeconds is in rateLimitErr.Data")
+            case errors.As(err, &conflictErr):
+                fmt.Println("Retry already running; poll CheckAllowances again shortly.")
+            default:
+                log.Fatal(err)
+            }
+        }
+    }
+}
+
+for _, target := range allowances.Targets {
+    if target.Status == limitless.PartnerAccountAllowanceStatusSubmitted {
+        // A sponsored tx/user operation was submitted by this retry request.
+        // Poll CheckAllowances again after a short delay to observe confirmed chain state.
+    }
+}
+```
+
+Recommended partner flow:
+
+1. Poll `CheckAllowances(ctx, profileID)`.
+2. If `Ready == true`, continue.
+3. If targets are `missing` or `failed` with `Retryable == true`, call `RetryAllowances(ctx, profileID)`.
+4. If retry returns `submitted` targets, poll `CheckAllowances` again after a short delay.
+5. If retry returns `429`, wait `retryAfterSeconds`.
+6. If retry returns `409`, wait briefly and call `CheckAllowances` again.
 
 ## EOA mode
 
